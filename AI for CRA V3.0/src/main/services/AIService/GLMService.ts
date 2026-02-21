@@ -164,8 +164,8 @@ export class GLMService {
       model: config.model || 'glm-4',
       temperature: config.temperature || 0.3,
       topP: config.topP || 0.7,
-      maxTokens: config.maxTokens || 4096,
-      timeout: config.timeout || 60000, // Increased to 60 seconds
+      maxTokens: config.maxTokens || 10000, // Increased to handle large visit schedules
+      timeout: config.timeout || 120000, // 120 seconds - increased for large requests
       maxRetries: config.maxRetries || 3,
       maxRequestsPerMinute: config.maxRequestsPerMinute || 60,
       proxy: config.proxy || '',
@@ -201,6 +201,31 @@ export class GLMService {
   }
 
   /**
+   * Check if an error is retryable based on its type/message
+   */
+  private isRetryableError(error: Error): boolean {
+    const errorMessage = error.message;
+    const errorCode = (error as any).code;
+
+    // Retry on network errors
+    const retryableCodes = ['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'EPIPE', 'EAI_AGAIN'];
+    if (errorCode && retryableCodes.includes(errorCode)) {
+      return true;
+    }
+
+    // Retry on specific error messages
+    const retryablePatterns = [
+      /socket hang up/i,
+      /timeout/i,
+      /network/i,
+      /fetch failed/i,
+      /5\d\d/, // 5xx server errors
+    ];
+
+    return retryablePatterns.some(pattern => pattern.test(errorMessage));
+  }
+
+  /**
    * Call GLM API with retry logic
    */
   private async callWithRetry<T>(
@@ -226,32 +251,85 @@ export class GLMService {
 
     for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
       try {
+        console.log(`[GLM API] Attempt ${attempt + 1}/${this.config.maxRetries} for ${context}`);
         const result = await fn();
         return ok(result);
       } catch (error) {
         lastError = error as Error;
+        const errorCode = (error as any).code;
 
-        // Don't retry on authentication errors
-        if (error instanceof Error && error.message.includes('401')) {
+        console.error(`[GLM API] Attempt ${attempt + 1} failed:`, {
+          message: lastError.message,
+          code: errorCode,
+          context
+        });
+
+        // Don't retry on authentication errors (401) or permission errors (403)
+        if (error instanceof Error && (error.message.includes('401') || error.message.includes('403'))) {
           return err(
             createError(
               'AI_AUTH_FAILED',
               ErrorCategory.NETWORK,
               ErrorSeverity.CRITICAL,
-              'API密钥无效，请检查设置',
+              'API密钥无效或权限不足，请检查设置',
               error.message,
               { attempt, context }
             )
           );
         }
 
-        // Wait before retry (exponential backoff)
-        if (attempt < this.config.maxRetries - 1) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * Math.pow(2, attempt))
+        // Don't retry on bad request (400) - indicates client error
+        if (error instanceof Error && error.message.includes('400')) {
+          return err(
+            createError(
+              'AI_BAD_REQUEST',
+              ErrorCategory.DOMAIN,
+              ErrorSeverity.CRITICAL,
+              '请求格式错误',
+              error.message,
+              { attempt, context }
+            )
           );
         }
+
+        // Check if error is retryable
+        if (!this.isRetryableError(lastError)) {
+          console.error('[GLM API] Non-retryable error encountered:', lastError.message);
+          return err(
+            createError(
+              'AI_REQUEST_FAILED',
+              ErrorCategory.NETWORK,
+              ErrorSeverity.CRITICAL,
+              'AI请求失败，请检查网络连接',
+              lastError.message,
+              { attempts: attempt + 1, context }
+            )
+          );
+        }
+
+        // Wait before retry (exponential backoff with jitter)
+        if (attempt < this.config.maxRetries - 1) {
+          const baseDelay = 1000 * Math.pow(2, attempt);
+          const jitter = Math.random() * 500; // Add 0-500ms jitter
+          const delay = baseDelay + jitter;
+          console.log(`[GLM API] Waiting ${delay}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
       }
+    }
+
+    // All retries exhausted
+    const errorCode = (lastError as any)?.code;
+    const errorMessage = lastError?.message || 'Unknown error';
+
+    // Provide user-friendly error messages based on error code
+    let userMessage = 'AI请求失败，请检查网络连接';
+    if (errorCode === 'ECONNRESET') {
+      userMessage = 'API连接被服务器中断，可能是服务器繁忙或请求过大，请稍后重试';
+    } else if (errorCode === 'ETIMEDOUT') {
+      userMessage = 'API请求超时，请检查网络连接或稍后重试';
+    } else if (errorCode === 'ENOTFOUND') {
+      userMessage = '无法连接到API服务器，请检查网络设置';
     }
 
     return err(
@@ -259,9 +337,9 @@ export class GLMService {
         'AI_REQUEST_FAILED',
         ErrorCategory.NETWORK,
         ErrorSeverity.CRITICAL,
-        'AI请求失败，请检查网络连接',
-        lastError?.message || 'Unknown error',
-        { attempts: this.config.maxRetries, context }
+        userMessage,
+        errorMessage,
+        { attempts: this.config.maxRetries, context, errorCode }
       )
     );
   }
@@ -361,42 +439,132 @@ export class GLMService {
   }
 
   /**
+   * Attempt to fix incomplete/truncated JSON
+   */
+  private fixIncompleteJSON(jsonStr: string): string {
+    let fixed = jsonStr;
+
+    // 1. Remove trailing commas before brackets/braces
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+
+    // 2. Fix incomplete strings (if string is not closed)
+    // Count quotes - if odd, we have an unclosed string
+    const quotes = (fixed.match(/"/g) || []).length;
+    const insideString = quotes % 2 !== 0;
+
+    if (insideString) {
+      // Find the last quote and close the string
+      const lastQuoteIndex = fixed.lastIndexOf('"');
+      if (lastQuoteIndex !== -1) {
+        // Remove everything after the last quote starting position
+        // and close the string properly
+        const beforeLastQuote = fixed.substring(0, lastQuoteIndex);
+        // Check if we're inside a property name or value
+        const lastKeyStart = beforeLastQuote.lastIndexOf('"');
+        if (lastKeyStart !== -1 && lastKeyStart < lastQuoteIndex) {
+          // We have an unclosed string, close it
+          fixed = fixed.substring(0, lastQuoteIndex + 1) + '"';
+        }
+      }
+    }
+
+    // 3. Fix incomplete objects/arrays (remove incomplete trailing items)
+    // If we end with an incomplete property, remove it
+    fixed = fixed.replace(/,\s*"[^"]*:\s*[^,}\]]*$/, '');
+
+    // 4. Count brackets and close them
+    const openBraces = (fixed.match(/\{/g) || []).length;
+    const closeBraces = (fixed.match(/\}/g) || []).length;
+    const openBrackets = (fixed.match(/\[/g) || []).length;
+    const closeBrackets = (fixed.match(/\]/g) || []).length;
+
+    // Close missing brackets first (innermost)
+    const missingBrackets = openBrackets - closeBrackets;
+    for (let i = 0; i < missingBrackets; i++) {
+      fixed += ']';
+    }
+
+    // Close missing braces (outermost)
+    const missingBraces = openBraces - closeBraces;
+    for (let i = 0; i < missingBraces; i++) {
+      fixed += '}';
+    }
+
+    return fixed;
+  }
+
+  /**
    * Parse JSON response from AI
    */
   private parseJSONResponse<T>(response: string): Result<T> {
-    try {
-      // Try to extract JSON from markdown code blocks
-      let jsonStr = response;
+    console.log('[parseJSONResponse] Response length:', response.length);
+    console.log('[parseJSONResponse] Response preview (first 500 chars):', response.substring(0, 500));
 
-      // Extract from ```json blocks
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1];
-      }
+    let jsonStr = response;
 
+    // Extract from ```json blocks
+    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      console.log('[parseJSONResponse] Found ```json block');
+      jsonStr = jsonMatch[1];
+    } else {
       // Extract from ``` blocks
       const codeMatch = response.match(/```\s*([\s\S]*?)\s*```/);
       if (codeMatch) {
+        console.log('[parseJSONResponse] Found ``` block');
         jsonStr = codeMatch[1];
+      } else {
+        // Find JSON object in the response
+        const objectMatch = response.match(/\{[\s\S]*\}/);
+        if (objectMatch) {
+          console.log('[parseJSONResponse] Found JSON object');
+          jsonStr = objectMatch[0];
+        }
       }
+    }
 
-      // Find JSON object in the response
-      const objectMatch = response.match(/\{[\s\S]*\}/);
-      if (objectMatch) {
-        jsonStr = objectMatch[0];
-      }
+    console.log('[parseJSONResponse] JSON length before fix:', jsonStr.length);
 
+    // First attempt: try parsing as-is
+    try {
       const parsed = JSON.parse(jsonStr);
+      console.log('[parseJSONResponse] Successfully parsed, keys:', Object.keys(parsed));
       return ok(parsed as T);
     } catch (error) {
+      console.warn('[parseJSONResponse] Initial parse failed, attempting to fix incomplete JSON...');
+      console.warn('[parseJSONResponse] Error:', (error as Error).message);
+    }
+
+    // Second attempt: try fixing incomplete JSON
+    try {
+      const fixed = this.fixIncompleteJSON(jsonStr);
+      console.log('[parseJSONResponse] Fixed JSON length:', fixed.length);
+      console.log('[parseJSONResponse] Added chars:', fixed.length - jsonStr.length);
+      const parsed = JSON.parse(fixed);
+      console.log('[parseJSONResponse] Successfully parsed after fix, keys:', Object.keys(parsed));
+      return ok(parsed as T);
+    } catch (error) {
+      console.error('[parseJSONResponse] Parse error after fix:', error);
+      // Show more context around the error position
+      const errorMsg = (error as Error).message;
+      const match = errorMsg.match(/position (\d+)/);
+      if (match) {
+        const pos = parseInt(match[1]);
+        const start = Math.max(0, pos - 200);
+        const end = Math.min(jsonStr.length, pos + 200);
+        console.error('[parseJSONResponse] Error context:', jsonStr.substring(start, end));
+      } else {
+        console.error('[parseJSONResponse] Error response (first 1000 chars):', response.substring(0, 1000));
+      }
+
       return err(
         createError(
           'AI_PARSE_FAILED',
           ErrorCategory.DOMAIN,
           ErrorSeverity.CRITICAL,
-          'AI响应解析失败',
-          error instanceof Error ? error.message : 'Failed to parse JSON',
-          { response: response.substring(0, 500) }
+          'AI响应解析失败，返回的JSON格式不完整或有错误',
+          errorMsg,
+          { response: response.substring(0, 1000) }
         )
       );
     }
@@ -410,7 +578,7 @@ export class GLMService {
    * Extract inclusion and exclusion criteria from protocol
    */
   async extractCriteria(protocolContent: string): Promise<Result<CriteriaSet>> {
-    const truncatedContent = truncateContent(protocolContent, 8000);
+    const truncatedContent = truncateContent(protocolContent);
     const prompt = formatPrompt(CRITERIA_EXTRACTION_PROMPT, { content: truncatedContent });
 
     const responseResult = await this.callWithRetry(async () => {
@@ -466,7 +634,8 @@ export class GLMService {
    * Extract visit schedule from protocol
    */
   async extractVisitSchedule(protocolContent: string): Promise<Result<VisitSchedule[]>> {
-    const truncatedContent = truncateContent(protocolContent, 8000);
+    console.log('[extractVisitSchedule] Starting extraction...');
+    const truncatedContent = truncateContent(protocolContent);
     const prompt = formatPrompt(VISIT_SCHEDULE_EXTRACTION_PROMPT, { content: truncatedContent });
 
     const responseResult = await this.callWithRetry(async () => {
@@ -476,10 +645,14 @@ export class GLMService {
       ]);
     }, 'extractVisitSchedule');
 
+    console.log('[extractVisitSchedule] Response result:', responseResult.success);
+
     if (responseResult.success === false) {
+      console.error('[extractVisitSchedule] API request failed:', responseResult.error);
       return err(responseResult.error);
     }
 
+    console.log('[extractVisitSchedule] Starting JSON parse...');
     const parseResult = this.parseJSONResponse<{
       visitSchedule: Array<{
         visitNumber: string;
@@ -492,10 +665,12 @@ export class GLMService {
     }>(responseResult.data);
 
     if (parseResult.success === false) {
+      console.error('[extractVisitSchedule] Parse failed:', parseResult.error);
       return err(parseResult.error);
     }
 
     const data = parseResult.data;
+    console.log('[extractVisitSchedule] Parsed data, visitSchedule count:', data.visitSchedule?.length || 0);
 
     // Transform to proper types
     const visitSchedule: VisitSchedule[] = (data.visitSchedule || []).map((item, index) => ({
@@ -521,6 +696,7 @@ export class GLMService {
       _aiExtracted: true,
     }));
 
+    console.log('[extractVisitSchedule] Successfully transformed', visitSchedule.length, 'visits');
     return ok(visitSchedule);
   }
 
@@ -532,7 +708,7 @@ export class GLMService {
    * Recognize medications from subject records
    */
   async recognizeMedications(subjectContent: string): Promise<Result<MedicationRecord[]>> {
-    const truncatedContent = truncateContent(subjectContent, 8000);
+    const truncatedContent = truncateContent(subjectContent);
     const prompt = formatPrompt(MEDICATION_RECOGNITION_PROMPT, { content: truncatedContent });
 
     const responseResult = await this.callWithRetry(async () => {

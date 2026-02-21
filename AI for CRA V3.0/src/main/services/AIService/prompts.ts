@@ -117,12 +117,23 @@ export const CRITERIA_EXTRACTION_DETAILED_PROMPT = `请从以下临床试验方�
  */
 export const VISIT_SCHEDULE_EXTRACTION_PROMPT = `请从以下临床试验方案文件中提取完整的访视计划表。
 
+**重点关注：**
+- 请优先从方案的**流程表**（Study Flow Chart/Schema）、**访视计划表**（Visit Schedule）、**评估表**（Assessment Schedule）等表格中提取信息
+- 这些表格通常包含完整的访视时间安排和检查项目清单
+- 如果有多个表格，请整合所有相关信息
+
 **要求：**
 1. 识别所有访视（筛选期、治疗期、随访期等）
 2. 提取每个访视的编号和名称
 3. 提取访视的时间窗口（开始时间和结束时间）
-4. 提取每个访视的程序/操作项目
-5. 提取每个访视的评估/检查项目
+4. 提取每个访视的程序/操作项目（最多提取10个主要的）
+5. 提取每个访视的评估/检查项目（最多提取10个主要的）
+
+**重要限制：**
+- 每个访视的 procedures 和 assessments 最多只提取 10 个最主要的项目
+- 项目名称要简洁，避免冗余描述
+- 不要包含任何解释性文字或备注
+- JSON必须完整且格式正确
 
 **输出格式（JSON）：**
 \`\`\`json
@@ -349,12 +360,17 @@ export const formatPrompt = (template: string, params: Record<string, string>): 
 
 /**
  * Truncate content to fit within token limits
+ *
+ * Note: Reduced from 8000 to 6000 tokens to improve API reliability.
+ * GLM-4 has a 128K context window, but smaller requests are more stable
+ * and less likely to encounter ECONNRESET errors.
  */
-export const truncateContent = (content: string, maxTokens: number = 8000): string => {
+export const truncateContent = (content: string, maxTokens: number = 6000): string => {
   // Rough estimate: 1 token ≈ 2 characters for Chinese
   const maxChars = maxTokens * 2;
   if (content.length <= maxChars) {
     return content;
   }
-  return content.substring(0, maxChars) + '\n\n[内容已截断...]';
+  console.log(`[truncateContent] Truncating content from ${content.length} to ${maxChars} characters`);
+  return content.substring(0, maxChars) + '\n\n[内容已截断，原文较长，仅展示部分内容...]';
 };

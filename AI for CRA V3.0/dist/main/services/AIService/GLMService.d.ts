@@ -29,6 +29,10 @@ export declare class GLMService {
      */
     initialize(): Result<void>;
     /**
+     * Check if an error is retryable based on its type/message
+     */
+    private isRetryableError;
+    /**
      * Call GLM API with retry logic
      */
     private callWithRetry;
@@ -36,6 +40,10 @@ export declare class GLMService {
      * Call GLM API using native HTTPS
      */
     private callAPI;
+    /**
+     * Attempt to fix incomplete/truncated JSON
+     */
+    private fixIncompleteJSON;
     /**
      * Parse JSON response from AI
      */
