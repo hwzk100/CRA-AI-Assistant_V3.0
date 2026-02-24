@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(if exist dist rmdir /s /q dist)",
+      "Bash(npm run build:*)"
     ]
   }
 }

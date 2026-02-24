@@ -339,3 +339,57 @@ export const cloneItem = <T extends { id: string }>(item: T): T => {
     id: generateId(),
   };
 };
+
+// ============================================================================
+// Worksheet 2 Extension: Subject Visit Tracking
+// ============================================================================
+
+/**
+ * Subject visit data for visit time verification
+ * 用于核对受试者各访视的实际访视时间
+ */
+export interface SubjectVisitData {
+  /** Unique identifier */
+  id: string;
+  /** Subject number (e.g., "001", "002") */
+  subjectNumber: string;
+  /** Reference to visit schedule ID */
+  visitScheduleId: string;
+  /** Actual visit date in YYYY-MM-DD format */
+  actualVisitDate?: string;
+  /** Visit status */
+  status: 'completed' | 'pending' | 'missed' | 'not_applicable';
+  /** Additional notes */
+  notes?: string;
+  /** Whether this was extracted by AI */
+  _aiExtracted?: boolean;
+  /** Whether this was confirmed by user */
+  _userConfirmed?: boolean;
+}
+
+/**
+ * Subject visit item data for visit item time verification
+ * 用于核对受试者各访视项目的实际完成时间
+ */
+export interface SubjectVisitItemData {
+  /** Unique identifier */
+  id: string;
+  /** Subject number (e.g., "001", "002") */
+  subjectNumber: string;
+  /** Reference to visit schedule ID */
+  visitScheduleId: string;
+  /** Procedure or assessment name */
+  itemName: string;
+  /** Item type */
+  itemType: 'procedure' | 'assessment';
+  /** Actual completion date in YYYY-MM-DD format */
+  actualDate?: string;
+  /** Completion status */
+  status: 'completed' | 'pending' | 'not_done' | 'not_applicable';
+  /** Additional notes */
+  notes?: string;
+  /** Whether this was extracted by AI */
+  _aiExtracted?: boolean;
+  /** Whether this was confirmed by user */
+  _userConfirmed?: boolean;
+}

@@ -209,6 +209,9 @@ export declare const IPCChannel: {
     readonly AI_EXTRACT_CRITERIA: "ai:extractCriteria";
     readonly AI_EXTRACT_VISIT_SCHEDULE: "ai:extractVisitSchedule";
     readonly AI_RECOGNIZE_MEDICATIONS: "ai:recognizeMedications";
+    readonly AI_EXTRACT_SUBJECT_NUMBER: "ai:extractSubjectNumber";
+    readonly AI_EXTRACT_SUBJECT_VISITS: "ai:extractSubjectVisits";
+    readonly AI_EXTRACT_SUBJECT_ITEMS: "ai:extractSubjectItems";
     readonly AI_CHAT: "ai:chat";
     readonly EXCEL_EXPORT: "excel:export";
     readonly EXCEL_EXPORT_TRACKER: "excel:exportTracker";
@@ -247,6 +250,17 @@ export type IPCRequestPayload = {
     'ai:recognizeMedications': {
         subjectContent: string;
     };
+    'ai:extractSubjectNumber': {
+        subjectContent: string;
+    };
+    'ai:extractSubjectVisits': {
+        subjectContent: string;
+        visitScheduleSummary: string;
+    };
+    'ai:extractSubjectItems': {
+        subjectContent: string;
+        visitItemsSummary: string;
+    };
     'ai:chat': {
         message: string;
         context?: string;
@@ -277,6 +291,21 @@ export type IPCResponsePayload = {
     'ai:extractCriteria': Result<CriteriaSet>;
     'ai:extractVisitSchedule': Result<VisitSchedule[]>;
     'ai:recognizeMedications': Result<MedicationRecord[]>;
+    'ai:extractSubjectNumber': Result<string>;
+    'ai:extractSubjectVisits': Result<Array<{
+        visitScheduleId: string;
+        actualVisitDate?: string;
+        status: string;
+        notes?: string;
+    }>>;
+    'ai:extractSubjectItems': Result<Array<{
+        visitScheduleId: string;
+        itemName: string;
+        itemType: string;
+        actualDate?: string;
+        status: string;
+        notes?: string;
+    }>>;
     'ai:chat': Result<string>;
     [IPCChannel.SETTINGS_GET]: Result<AppSettings>;
     'excel:exportTracker': Result<string>;

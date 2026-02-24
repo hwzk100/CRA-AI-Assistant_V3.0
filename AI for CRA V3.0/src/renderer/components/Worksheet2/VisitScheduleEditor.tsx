@@ -1,12 +1,14 @@
 /**
  * Worksheet 2 Component - Visit Schedule
  * Semi-automatic mode: AI extraction + user editing
+ * With subject data extraction for verification checklists
  */
 
 import React, { useState } from 'react';
 import { Card, Button } from '../common';
-import { useStore, useVisitSchedule, useProtocolFiles } from '../../hooks/useStore';
+import { useStore, useVisitSchedule, useProtocolFiles, useSubjectFiles, useSubjectVisits, useSubjectVisitItems } from '../../hooks/useStore';
 import { VisitSchedule } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 
 // ============================================================================
 // Types
@@ -211,17 +213,24 @@ const VisitCard: React.FC<VisitCardProps> = ({ visit, isEditing, onEdit, onSave,
 export const VisitScheduleEditor: React.FC = () => {
   const visitSchedule = useVisitSchedule();
   const protocolFiles = useProtocolFiles();
+  const subjectFiles = useSubjectFiles();
+  const subjectVisits = useSubjectVisits();
+  const subjectVisitItems = useSubjectVisitItems();
   const {
     setVisitSchedule,
     addVisitScheduleItem,
     updateVisitScheduleItem,
     deleteVisitScheduleItem,
+    setSubjectVisits,
+    setSubjectVisitItems,
     setProcessing,
     setError,
   } = useStore();
 
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isExtractingSubjects, setIsExtractingSubjects] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   /**
    * Extract visit schedule from protocol
@@ -304,6 +313,123 @@ export const VisitScheduleEditor: React.FC = () => {
     setVisitSchedule([]);
   };
 
+  /**
+   * Extract subject data from medical records
+   */
+  const handleExtractSubjectData = async () => {
+    // Check if visit schedule exists
+    if (visitSchedule.length === 0) {
+      setError('无法提取', '请先提取访视计划');
+      return;
+    }
+
+    // Check if there are subject files
+    if (subjectFiles.length === 0) {
+      setError('无法提取', '请先在存储区B上传受试者文件');
+      return;
+    }
+
+    // Get completed subject files
+    const completedFiles = subjectFiles.filter(
+      (f) => f.status === 'completed' && f.extractedText
+    );
+
+    if (completedFiles.length === 0) {
+      setError('无法提取', '请等待文件处理完成后再提取受试者数据');
+      return;
+    }
+
+    // Prepare visit schedule summary for AI
+    const visitScheduleSummary = visitSchedule.map((visit) =>
+      `${visit.visitNumber}. ${visit.visitName} (${visit.windowStart}~${visit.windowEnd})`
+    ).join('\n');
+
+    const visitItemsSummary = visitSchedule.map((visit) => {
+      const procedures = visit.procedures.map((p) => `${visit.visitNumber}-${p.name}`).join(', ');
+      const assessments = visit.assessments.map((a) => `${visit.visitNumber}-${a.name}`).join(', ');
+      return [procedures, assessments].filter(Boolean).join(', ');
+    }).join('\n');
+
+    setIsExtractingSubjects(true);
+    setProcessing(true, '正在提取受试者数据...');
+
+    try {
+      const allSubjectVisits: SubjectVisitData[] = [];
+      const allSubjectVisitItems: SubjectVisitItemData[] = [];
+
+      // Process each subject file
+      for (const file of completedFiles) {
+        const content = file.extractedText || '';
+
+        // Step 1: Extract subject number
+        const numberResult = await window.electronAPI.extractSubjectNumber(content);
+        if (!numberResult.success) {
+          console.error('Failed to extract subject number:', numberResult.error);
+          continue;
+        }
+
+        const subjectNumber = numberResult.data || `SUB-${Date.now()}`;
+
+        // Step 2: Extract subject visit dates
+        const visitsResult = await window.electronAPI.extractSubjectVisits(
+          content,
+          visitScheduleSummary
+        );
+
+        if (visitsResult.success && visitsResult.data) {
+          visitsResult.data.forEach((visit) => {
+            allSubjectVisits.push({
+              id: `sv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              subjectNumber,
+              visitScheduleId: visit.visitScheduleId,
+              actualVisitDate: visit.actualVisitDate,
+              status: visit.status as 'completed' | 'pending' | 'missed' | 'not_applicable',
+              notes: visit.notes,
+              _aiExtracted: true,
+            });
+          });
+        }
+
+        // Step 3: Extract subject visit items
+        const itemsResult = await window.electronAPI.extractSubjectItems(
+          content,
+          visitItemsSummary
+        );
+
+        if (itemsResult.success && itemsResult.data) {
+          itemsResult.data.forEach((item) => {
+            allSubjectVisitItems.push({
+              id: `svi-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              subjectNumber,
+              visitScheduleId: item.visitScheduleId,
+              itemName: item.itemName,
+              itemType: item.itemType as 'procedure' | 'assessment',
+              actualDate: item.actualDate,
+              status: item.status as 'completed' | 'pending' | 'not_done' | 'not_applicable',
+              notes: item.notes,
+              _aiExtracted: true,
+            });
+          });
+        }
+
+        // Update progress
+        const currentIndex = completedFiles.indexOf(file) + 1;
+        setProcessing(true, `正在提取受试者数据 (${currentIndex}/${completedFiles.length})...`);
+      }
+
+      // Save to store
+      setSubjectVisits(allSubjectVisits);
+      setSubjectVisitItems(allSubjectVisitItems);
+
+      setShowPreview(true);
+    } catch (error) {
+      setError('提取失败', error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setIsExtractingSubjects(false);
+      setProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Main Card */}
@@ -319,9 +445,14 @@ export const VisitScheduleEditor: React.FC = () => {
               添加访视
             </Button>
             {visitSchedule.length > 0 && (
-              <Button variant="secondary" onClick={handleClear}>
-                清空
-              </Button>
+              <>
+                <Button variant="secondary" onClick={handleExtractSubjectData} loading={isExtractingSubjects}>
+                  提取受试者数据
+                </Button>
+                <Button variant="secondary" onClick={handleClear}>
+                  清空
+                </Button>
+              </>
             )}
           </div>
         }
@@ -370,6 +501,121 @@ export const VisitScheduleEditor: React.FC = () => {
               <p className="text-base text-primary-700 font-medium">
                 已确认: {visitSchedule.filter((v) => v._userEdited).length}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subject Data Preview */}
+      {subjectVisits.length > 0 || subjectVisitItems.length > 0 ? (
+        <Card
+          title="受试者数据预览"
+          subtitle={`已提取 ${new Set(subjectVisits.map(v => v.subjectNumber)).size} 名受试者的数据`}
+          actions={
+            <Button variant="secondary" onClick={() => setShowPreview(!showPreview)}>
+              {showPreview ? '隐藏预览' : '显示预览'}
+            </Button>
+          }
+        >
+          {showPreview && (
+            <div className="space-y-6">
+              {/* Visit Time Preview */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">访视时间核对表预览</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-gray-300">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 border-b text-left">受试者编号</th>
+                        {visitSchedule.slice(0, 5).map((visit) => (
+                          <th key={visit.id} className="px-4 py-2 border-b text-left">
+                            {visit.visitNumber}-{visit.visitName}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(new Set(subjectVisits.map(v => v.subjectNumber))).slice(0, 3).map((subjectNumber) => (
+                        <tr key={subjectNumber}>
+                          <td className="px-4 py-2 border-b">{subjectNumber}</td>
+                          {visitSchedule.slice(0, 5).map((visit) => {
+                            const subjectVisit = subjectVisits.find(
+                              (v) => v.subjectNumber === subjectNumber && v.visitScheduleId === visit.id
+                            );
+                            return (
+                              <td key={visit.id} className="px-4 py-2 border-b">
+                                {subjectVisit?.actualVisitDate || '-'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {subjectVisits.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    共 {new Set(subjectVisits.map(v => v.subjectNumber)).size} 名受试者 × {visitSchedule.length} 个访视
+                  </p>
+                )}
+              </div>
+
+              {/* Visit Item Time Preview */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">访视项目时间核对表预览</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-gray-300">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 border-b text-left">受试者编号</th>
+                        {visitSchedule.slice(0, 3).flatMap((visit) =>
+                          visit.procedures.slice(0, 3).map((proc) => (
+                            <th key={`${visit.id}-${proc.id}`} className="px-4 py-2 border-b text-left">
+                              {visit.visitNumber}-{proc.name}
+                            </th>
+                          ))
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(new Set(subjectVisitItems.map(v => v.subjectNumber))).slice(0, 3).map((subjectNumber) => (
+                        <tr key={subjectNumber}>
+                          <td className="px-4 py-2 border-b">{subjectNumber}</td>
+                          {visitSchedule.slice(0, 3).flatMap((visit) =>
+                            visit.procedures.slice(0, 3).map((proc) => {
+                              const subjectItem = subjectVisitItems.find(
+                                (i) => i.subjectNumber === subjectNumber && i.visitScheduleId === visit.id && i.itemName === proc.name
+                              );
+                              return (
+                                <td key={`${visit.id}-${proc.id}`} className="px-4 py-2 border-b">
+                                  {subjectItem?.actualDate || '-'}
+                                </td>
+                              );
+                            })
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {subjectVisitItems.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    共 {new Set(subjectVisitItems.map(v => v.subjectNumber)).size} 名受试者 × {
+                      visitSchedule.reduce((sum, visit) => sum + visit.procedures.length + visit.assessments.length, 0)
+                    } 个项目
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      ) : visitSchedule.length > 0 && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6">
+          <div className="flex items-center gap-4">
+            <span className="text-4xl">📋</span>
+            <div>
+              <p className="text-base text-blue-700 font-medium">受试者数据待提取</p>
+              <p className="text-sm text-blue-600">上传受试者文件后，点击"提取受试者数据"生成核对表</p>
             </div>
           </div>
         </div>

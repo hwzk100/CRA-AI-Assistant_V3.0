@@ -110,6 +110,23 @@ const electronAPI = {
       subjectContent: subjectContent || '',
     }),
 
+  extractSubjectNumber: (subjectContent?: string) =>
+    createIPCRenderer().invoke('ai:extractSubjectNumber', {
+      subjectContent: subjectContent || '',
+    }),
+
+  extractSubjectVisits: (subjectContent?: string, visitScheduleSummary?: string) =>
+    createIPCRenderer().invoke('ai:extractSubjectVisits', {
+      subjectContent: subjectContent || '',
+      visitScheduleSummary: visitScheduleSummary || '',
+    }),
+
+  extractSubjectItems: (subjectContent?: string, visitItemsSummary?: string) =>
+    createIPCRenderer().invoke('ai:extractSubjectItems', {
+      subjectContent: subjectContent || '',
+      visitItemsSummary: visitItemsSummary || '',
+    }),
+
   chat: (message: string, context?: string) =>
     createIPCRenderer().invoke('ai:chat', {
       message,
@@ -128,6 +145,8 @@ const electronAPI = {
     inclusionCriteria: any[];
     exclusionCriteria: any[];
     visitSchedule: any[];
+    subjectVisits: any[];
+    subjectVisitItems: any[];
     medications: any[];
   }) =>
     createIPCRenderer().invoke('excel:exportTracker', data),

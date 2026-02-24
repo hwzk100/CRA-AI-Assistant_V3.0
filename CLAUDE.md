@@ -95,7 +95,7 @@ All IPC responses use the `Result<T>` type (not plain throws):
 - `extractCriteria(protocolContent)` - Extract inclusion/exclusion criteria
 - `extractVisitSchedule(protocolContent)` - Extract visit schedule
 - `recognizeMedications(subjectContent)` - Recognize medications from records
-- `chat(message, context)` - Chat with AI assistant
+- `chat(message, context)` - Chat with AI assistant (未完全实现/Not fully implemented)
 - `testConnection()` - Test API connectivity
 
 **Excel Operations** (`excel:*`):
@@ -144,7 +144,8 @@ Zustand store at `src/renderer/hooks/useStore.ts` with persistence:
 - Custom JWT token generation (no external SDK dependency)
 - Rate limiting (60 req/min)
 - Retry logic with exponential backoff
-- Four main AI operations: `extractCriteria()`, `extractVisitSchedule()`, `recognizeMedications()`, `chat()`
+- Three implemented AI operations: `extractCriteria()`, `extractVisitSchedule()`, `recognizeMedications()`
+- `chat()` endpoint exists in IPC handler but returns a placeholder (功能开发中)
 
 API key format: `id.secret` (splits on `.` for JWT signing).
 

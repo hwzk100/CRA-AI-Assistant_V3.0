@@ -10,6 +10,7 @@ import {
   VisitSchedule,
   MedicationRecord,
 } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 import { EXCEL_CONSTANTS } from '@shared/constants/app';
 import { ok, err, createError, ErrorCategory, ErrorSeverity, Result } from '@shared/types/core';
 import * as fs from 'fs';
@@ -37,6 +38,10 @@ export interface TrackerData {
   exclusionCriteria: ExclusionCriteria[];
   /** Visit schedule */
   visitSchedule: VisitSchedule[];
+  /** Subject visit data for time verification */
+  subjectVisits: SubjectVisitData[];
+  /** Subject visit item data for item time verification */
+  subjectVisitItems: SubjectVisitItemData[];
   /** Medication records */
   medications: MedicationRecord[];
 }
@@ -88,8 +93,11 @@ export class ExcelGenerator {
       console.log('[ExcelGenerator] Creating criteria sheet...');
       await this.createCriteriaSheet(data.inclusionCriteria, data.exclusionCriteria);
 
-      console.log('[ExcelGenerator] Creating visit schedule sheet...');
-      await this.createVisitScheduleSheet(data.visitSchedule);
+      console.log('[ExcelGenerator] Creating visit time checklist sheet...');
+      await this.createVisitTimeChecklistSheet(data.visitSchedule, data.subjectVisits);
+
+      console.log('[ExcelGenerator] Creating visit item time checklist sheet...');
+      await this.createVisitItemTimeChecklistSheet(data.visitSchedule, data.subjectVisitItems);
 
       console.log('[ExcelGenerator] Creating medication sheet...');
       await this.createMedicationSheet(data.medications);
@@ -205,47 +213,159 @@ export class ExcelGenerator {
   }
 
   /**
-   * Create Worksheet 2: Visit Schedule
+   * Create Worksheet 2: Visit Time Checklist
+   * 访视时间核对表
    */
-  private async createVisitScheduleSheet(visitSchedule: VisitSchedule[]): Promise<void> {
-    const sheet = this.workbook.addWorksheet(EXCEL_CONSTANTS.WORKSHEET_NAMES.VISIT_SCHEDULE);
+  private async createVisitTimeChecklistSheet(
+    visitSchedule: VisitSchedule[],
+    subjectVisits: SubjectVisitData[]
+  ): Promise<void> {
+    const sheet = this.workbook.addWorksheet(EXCEL_CONSTANTS.WORKSHEET_NAMES.VISIT_TIME_CHECKLIST);
 
-    // Define columns
-    sheet.columns = [
-      { header: '访视编号', key: 'visitNumber', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
-      { header: '访视名称', key: 'visitName', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.WIDE },
-      { header: '时间窗口', key: 'window', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.WIDE },
-      { header: '程序', key: 'procedures', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.EXTRA_WIDE },
-      { header: '评估', key: 'assessments', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.EXTRA_WIDE },
-      { header: '备注', key: 'notes', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM },
-      { header: 'AI提取', key: 'aiExtracted', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
-      { header: '用户编辑', key: 'userEdited', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
+    // Group visits by subject number
+    const visitsBySubject = new Map<string, SubjectVisitData[]>();
+    subjectVisits.forEach((visit) => {
+      if (!visitsBySubject.has(visit.subjectNumber)) {
+        visitsBySubject.set(visit.subjectNumber, []);
+      }
+      visitsBySubject.get(visit.subjectNumber)!.push(visit);
+    });
+
+    // Get unique subject numbers sorted
+    const subjectNumbers = Array.from(visitsBySubject.keys()).sort();
+
+    // Build columns: first column is "受试者编号", then each visit is a column
+    const columns: Array<{ header: string; key: string; width: number }> = [
+      { header: '受试者编号', key: 'subjectNumber', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
     ];
+
+    visitSchedule.forEach((visit) => {
+      columns.push({
+        header: `${visit.visitNumber}-${visit.visitName}\n${visit.windowStart}~${visit.windowEnd}`,
+        key: `visit_${visit.id}`,
+        width: EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM,
+      });
+    });
+
+    sheet.columns = columns;
 
     if (this.options.applyStyling) {
       this.styleHeader(sheet);
     }
 
-    visitSchedule.forEach((visit, index) => {
-      const row = sheet.addRow({
-        visitNumber: visit.visitNumber,
-        visitName: visit.visitName,
-        window: `${visit.windowStart} ~ ${visit.windowEnd}`,
-        procedures: visit.procedures.map((p) => p.name).join('; '),
-        assessments: visit.assessments.map((a) => a.name).join('; '),
-        notes: visit.notes || '',
-        aiExtracted: visit._aiExtracted ? '是' : '否',
-        userEdited: visit._userEdited ? '是' : '否',
+    // Add rows for each subject
+    subjectNumbers.forEach((subjectNumber) => {
+      const rowData: Record<string, string> = { subjectNumber };
+
+      const subjectVisitList = visitsBySubject.get(subjectNumber) || [];
+      subjectVisitList.forEach((visit) => {
+        const key = `visit_${visit.visitScheduleId}`;
+        if (visit.actualVisitDate) {
+          rowData[key] = visit.actualVisitDate;
+        } else if (visit.status === 'not_applicable') {
+          rowData[key] = 'N/A';
+        } else if (visit.status === 'missed') {
+          rowData[key] = '错过';
+        } else if (visit.status === 'pending') {
+          rowData[key] = '待进行';
+        } else {
+          rowData[key] = '';
+        }
       });
 
-      if (this.options.applyStyling) {
-        // Highlight pending confirmation (AI extracted but not edited)
-        if (visit._aiExtracted && !visit._userEdited) {
-          this.stylePendingRow(row);
-        } else if (visit._userEdited) {
-          this.styleConfirmedRow(row);
-        }
+      sheet.addRow(rowData);
+    });
+  }
+
+  /**
+   * Create Worksheet 3: Visit Item Time Checklist
+   * 访视项目时间核对表
+   */
+  private async createVisitItemTimeChecklistSheet(
+    visitSchedule: VisitSchedule[],
+    subjectVisitItems: SubjectVisitItemData[]
+  ): Promise<void> {
+    const sheet = this.workbook.addWorksheet(EXCEL_CONSTANTS.WORKSHEET_NAMES.VISIT_ITEM_TIME_CHECKLIST);
+
+    // Group items by subject number
+    const itemsBySubject = new Map<string, SubjectVisitItemData[]>();
+    subjectVisitItems.forEach((item) => {
+      if (!itemsBySubject.has(item.subjectNumber)) {
+        itemsBySubject.set(item.subjectNumber, []);
       }
+      itemsBySubject.get(item.subjectNumber)!.push(item);
+    });
+
+    // Get unique subject numbers sorted
+    const subjectNumbers = Array.from(itemsBySubject.keys()).sort();
+
+    // Collect all unique items across all visits
+    const allItems: Array<{
+      visitScheduleId: string;
+      itemName: string;
+      itemType: string;
+      header: string;
+    }> = [];
+
+    visitSchedule.forEach((visit) => {
+      visit.procedures.forEach((proc) => {
+        allItems.push({
+          visitScheduleId: visit.id,
+          itemName: proc.name,
+          itemType: 'procedure',
+          header: `${visit.visitNumber}-${proc.name}`,
+        });
+      });
+      visit.assessments.forEach((assess) => {
+        allItems.push({
+          visitScheduleId: visit.id,
+          itemName: assess.name,
+          itemType: 'assessment',
+          header: `${visit.visitNumber}-${assess.name}`,
+        });
+      });
+    });
+
+    // Build columns: first column is "受试者编号", then each item is a column
+    const columns: Array<{ header: string; key: string; width: number }> = [
+      { header: '受试者编号', key: 'subjectNumber', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
+    ];
+
+    allItems.forEach((item) => {
+      columns.push({
+        header: item.header,
+        key: `item_${item.visitScheduleId}_${item.itemName}`,
+        width: EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM,
+      });
+    });
+
+    sheet.columns = columns;
+
+    if (this.options.applyStyling) {
+      this.styleHeader(sheet);
+    }
+
+    // Add rows for each subject
+    subjectNumbers.forEach((subjectNumber) => {
+      const rowData: Record<string, string> = { subjectNumber };
+
+      const subjectItemList = itemsBySubject.get(subjectNumber) || [];
+      subjectItemList.forEach((item) => {
+        const key = `item_${item.visitScheduleId}_${item.itemName}`;
+        if (item.actualDate) {
+          rowData[key] = item.actualDate;
+        } else if (item.status === 'not_applicable') {
+          rowData[key] = 'N/A';
+        } else if (item.status === 'not_done') {
+          rowData[key] = '未进行';
+        } else if (item.status === 'pending') {
+          rowData[key] = '待进行';
+        } else {
+          rowData[key] = '';
+        }
+      });
+
+      sheet.addRow(rowData);
     });
   }
 

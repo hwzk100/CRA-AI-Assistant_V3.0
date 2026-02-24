@@ -61,6 +61,30 @@ export declare class GLMService {
      */
     recognizeMedications(subjectContent: string): Promise<Result<MedicationRecord[]>>;
     /**
+     * Extract subject number from medical records
+     */
+    extractSubjectNumber(subjectContent: string): Promise<Result<string>>;
+    /**
+     * Extract subject visit dates from medical records
+     */
+    extractSubjectVisitDates(subjectContent: string, visitScheduleSummary: string): Promise<Result<Array<{
+        visitScheduleId: string;
+        actualVisitDate?: string;
+        status: string;
+        notes?: string;
+    }>>>;
+    /**
+     * Extract subject visit item dates from medical records
+     */
+    extractSubjectVisitItems(subjectContent: string, visitItemsSummary: string): Promise<Result<Array<{
+        visitScheduleId: string;
+        itemName: string;
+        itemType: string;
+        actualDate?: string;
+        status: string;
+        notes?: string;
+    }>>>;
+    /**
      * Update API key
      */
     updateApiKey(apiKey: string): Result<void>;

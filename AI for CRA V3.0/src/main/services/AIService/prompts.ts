@@ -344,6 +344,112 @@ export const VISIT_SCHEDULE_CLARIFICATION_PROMPT = `基于以下临床试验方�
 请提供准确、专业的回答，并引用相关访视的编号。`;
 
 // ============================================================================
+// Subject Data Extraction Prompts
+// ============================================================================
+
+/**
+ * Prompt for extracting subject number from medical records
+ */
+export const SUBJECT_NUMBER_EXTRACTION_PROMPT = `请从以下受试者医疗记录中提取受试者编号。
+
+**要求：**
+1. 识别受试者编号（可能标记为：受试者编号、Subject ID、Subject No、受试者号等）
+2. 提取完整的编号（如001、002、SUB-001等）
+3. 如果没有明确的受试者编号，根据文件名、病历号等信息推断
+
+**输出格式（JSON）：**
+\`\`\`json
+{
+  "subjectNumber": "001"
+}
+\`\`\`
+
+**医疗记录内容：**
+{content}
+
+请严格按照JSON格式输出。如果找不到受试者编号，返回空字符串""。`;
+
+/**
+ * Prompt for extracting subject visit dates from medical records
+ */
+export const SUBJECT_VISIT_DATES_PROMPT = `请从以下受试者医疗记录中提取各访视的实际访视时间。
+
+**访视计划参考：**
+{visitScheduleSummary}
+
+**要求：**
+1. 根据访视计划中的访视编号和名称，匹配医疗记录中的实际访视记录
+2. 提取每个访视的实际访视日期（YYYY-MM-DD格式）
+3. 判断访视状态：completed（已完成）、pending（待进行）、missed（已错过）、not_applicable（不适用）
+4. 识别访视相关的备注信息
+
+**输出格式（JSON）：**
+\`\`\`json
+{
+  "visits": [
+    {
+      "visitScheduleId": "1",
+      "actualVisitDate": "2024-01-15",
+      "status": "completed",
+      "notes": "访视完成，无不良事件"
+    }
+  ]
+}
+\`\`\`
+
+**状态说明：**
+- completed: 已完成访视
+- pending: 访视尚未进行
+- missed: 错过访视窗口
+- not_applicable: 该访视不适用于此受试者
+
+**医疗记录内容：**
+{content}
+
+请严格按照JSON格式输出。`;
+
+/**
+ * Prompt for extracting subject visit item dates from medical records
+ */
+export const SUBJECT_VISIT_ITEMS_PROMPT = `请从以下受试者医疗记录中提取各访视项目的实际完成时间。
+
+**访视项目参考：**
+{visitItemsSummary}
+
+**要求：**
+1. 根据访视项目列表，匹配医疗记录中的实际完成记录
+2. 提取每个项目的实际完成日期（YYYY-MM-DD格式）
+3. 判断项目状态：completed（已完成）、pending（待进行）、not_done（未进行）、not_applicable（不适用）
+4. 识别项目相关的备注信息
+
+**输出格式（JSON）：**
+\`\`\`json
+{
+  "items": [
+    {
+      "visitScheduleId": "1",
+      "itemName": "知情同意",
+      "itemType": "procedure",
+      "actualDate": "2024-01-15",
+      "status": "completed",
+      "notes": "已完成签署"
+    }
+  ]
+}
+\`\`\`
+
+**状态说明：**
+- completed: 项目已完成
+- pending: 项目待进行
+- not_done: 项目未进行
+- not_applicable: 该项目不适用于此受试者
+
+**医疗记录内容：**
+{content}
+
+请严格按照JSON格式输出。`;
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

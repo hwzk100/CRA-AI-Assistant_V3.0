@@ -1,1 +1,1 @@
-{"version":3,"file":"ExcelHandler.d.ts","sourceRoot":"","sources":["../../../src/main/handlers/ExcelHandler.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,EAAE,OAAO,EAAE,aAAa,EAAE,MAAM,UAAU,CAAC;AAQlD,eAAO,MAAM,kBAAkB,GAAI,SAAS,OAAO,EAAE,YAAY,aAAa,GAAG,IAAI,KAAG,IA8DvF,CAAC"}
+{"version":3,"file":"ExcelHandler.d.ts","sourceRoot":"","sources":["../../../src/main/handlers/ExcelHandler.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,EAAE,OAAO,EAAE,aAAa,EAAE,MAAM,UAAU,CAAC;AASlD,eAAO,MAAM,kBAAkB,GAAI,SAAS,OAAO,EAAE,YAAY,aAAa,GAAG,IAAI,KAAG,IAoEvF,CAAC"}

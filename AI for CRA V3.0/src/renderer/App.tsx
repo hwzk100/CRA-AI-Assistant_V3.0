@@ -62,6 +62,8 @@ export const App: React.FC = () => {
         inclusionCriteria: store.inclusionCriteria,
         exclusionCriteria: store.exclusionCriteria,
         visitSchedule: store.visitSchedule,
+        subjectVisits: store.subjectVisits,
+        subjectVisitItems: store.subjectVisitItems,
         medications: store.medications,
       });
 

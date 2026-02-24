@@ -3,6 +3,7 @@
  * Enhanced with persistence, type safety, and performance optimization
  */
 import { FileInfo, FileStatus, StorageZone, InclusionCriteria, ExclusionCriteria, VisitSchedule, MedicationRecord, AppSettings } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 interface AppStore {
     /** Protocol files (Storage Zone A) */
     protocolFiles: FileInfo[];
@@ -16,6 +17,10 @@ interface AppStore {
     exclusionCriteria: ExclusionCriteria[];
     /** Worksheet 2: Visit schedule */
     visitSchedule: VisitSchedule[];
+    /** Worksheet 2: Subject visit data for time verification */
+    subjectVisits: SubjectVisitData[];
+    /** Worksheet 2: Subject visit item data for item time verification */
+    subjectVisitItems: SubjectVisitItemData[];
     /** Worksheet 3: Medication records */
     medications: MedicationRecord[];
     /** Currently active worksheet tab */
@@ -60,6 +65,10 @@ interface AppStore {
     setExclusionCriteria: (criteria: ExclusionCriteria[]) => void;
     /** Set visit schedule */
     setVisitSchedule: (schedule: VisitSchedule[]) => void;
+    /** Set subject visits data */
+    setSubjectVisits: (visits: SubjectVisitData[]) => void;
+    /** Set subject visit items data */
+    setSubjectVisitItems: (items: SubjectVisitItemData[]) => void;
     /** Set medications */
     setMedications: (medications: MedicationRecord[]) => void;
     /** Add single visit schedule item */
@@ -109,6 +118,8 @@ export declare const useStore: import("zustand").UseBoundStore<Omit<import("zust
             inclusionCriteria: InclusionCriteria[];
             exclusionCriteria: ExclusionCriteria[];
             visitSchedule: VisitSchedule[];
+            subjectVisits: SubjectVisitData[];
+            subjectVisitItems: SubjectVisitItemData[];
             medications: MedicationRecord[];
         }, unknown>>) => void;
         clearStorage: () => void;
@@ -122,6 +133,8 @@ export declare const useStore: import("zustand").UseBoundStore<Omit<import("zust
             inclusionCriteria: InclusionCriteria[];
             exclusionCriteria: ExclusionCriteria[];
             visitSchedule: VisitSchedule[];
+            subjectVisits: SubjectVisitData[];
+            subjectVisitItems: SubjectVisitItemData[];
             medications: MedicationRecord[];
         }, unknown>>;
     };
@@ -150,6 +163,14 @@ export declare const useVisitSchedule: () => VisitSchedule[];
  * Selector hook for medications
  */
 export declare const useMedications: () => MedicationRecord[];
+/**
+ * Selector hook for subject visits
+ */
+export declare const useSubjectVisits: () => SubjectVisitData[];
+/**
+ * Selector hook for subject visit items
+ */
+export declare const useSubjectVisitItems: () => SubjectVisitItemData[];
 /**
  * Selector hook for active worksheet
  */

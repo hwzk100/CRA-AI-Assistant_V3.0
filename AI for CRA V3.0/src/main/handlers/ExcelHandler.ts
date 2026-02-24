@@ -5,6 +5,7 @@
 import { IpcMain, BrowserWindow } from 'electron';
 import { generateTrackerExcel, generateOutputPath } from '../services/ExcelService/ExcelGenerator';
 import { InclusionCriteria, ExclusionCriteria, VisitSchedule, MedicationRecord } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 
 // ============================================================================
 // Setup Handler
@@ -12,7 +13,7 @@ import { InclusionCriteria, ExclusionCriteria, VisitSchedule, MedicationRecord }
 
 export const setupExcelHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | null): void => {
   /**
-   * Export tracker Excel file with all three worksheets
+   * Export tracker Excel file with all worksheets
    */
   ipcMain.handle(
     'excel:exportTracker',
@@ -23,12 +24,16 @@ export const setupExcelHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow |
         inclusionCriteria,
         exclusionCriteria,
         visitSchedule,
+        subjectVisits,
+        subjectVisitItems,
         medications,
       }: {
         outputPath?: string;
         inclusionCriteria: InclusionCriteria[];
         exclusionCriteria: ExclusionCriteria[];
         visitSchedule: VisitSchedule[];
+        subjectVisits: SubjectVisitData[];
+        subjectVisitItems: SubjectVisitItemData[];
         medications: MedicationRecord[];
       }
     ) => {
@@ -41,6 +46,8 @@ export const setupExcelHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow |
           inclusionCriteria,
           exclusionCriteria,
           visitSchedule,
+          subjectVisits,
+          subjectVisitItems,
           medications,
         };
 

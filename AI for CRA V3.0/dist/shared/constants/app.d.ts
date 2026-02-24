@@ -91,7 +91,8 @@ export declare const AI_CONSTANTS: {
 export declare const EXCEL_CONSTANTS: {
     readonly WORKSHEET_NAMES: {
         readonly CRITERIA: "入排标准核对";
-        readonly VISIT_SCHEDULE: "访视时间安排表";
+        readonly VISIT_TIME_CHECKLIST: "访视时间核对表";
+        readonly VISIT_ITEM_TIME_CHECKLIST: "访视项目时间核对表";
         readonly MEDICATION: "合并用药和既往用药核对";
         readonly SUMMARY: "汇总";
     };

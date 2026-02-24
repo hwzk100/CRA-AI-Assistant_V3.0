@@ -16,6 +16,7 @@ import {
   AppSettings,
   DEFAULT_SETTINGS,
 } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 
 // ============================================================================
 // Store State Interface
@@ -43,6 +44,10 @@ interface AppStore {
   exclusionCriteria: ExclusionCriteria[];
   /** Worksheet 2: Visit schedule */
   visitSchedule: VisitSchedule[];
+  /** Worksheet 2: Subject visit data for time verification */
+  subjectVisits: SubjectVisitData[];
+  /** Worksheet 2: Subject visit item data for item time verification */
+  subjectVisitItems: SubjectVisitItemData[];
   /** Worksheet 3: Medication records */
   medications: MedicationRecord[];
 
@@ -112,6 +117,10 @@ interface AppStore {
   setExclusionCriteria: (criteria: ExclusionCriteria[]) => void;
   /** Set visit schedule */
   setVisitSchedule: (schedule: VisitSchedule[]) => void;
+  /** Set subject visits data */
+  setSubjectVisits: (visits: SubjectVisitData[]) => void;
+  /** Set subject visit items data */
+  setSubjectVisitItems: (items: SubjectVisitItemData[]) => void;
   /** Set medications */
   setMedications: (medications: MedicationRecord[]) => void;
 
@@ -194,6 +203,8 @@ export const useStore = create<AppStore>()(
       inclusionCriteria: [],
       exclusionCriteria: [],
       visitSchedule: [],
+      subjectVisits: [],
+      subjectVisitItems: [],
       medications: [],
 
       // UI state
@@ -266,6 +277,10 @@ export const useStore = create<AppStore>()(
       setExclusionCriteria: (criteria) => set({ exclusionCriteria: criteria }),
 
       setVisitSchedule: (schedule) => set({ visitSchedule: schedule }),
+
+      setSubjectVisits: (visits) => set({ subjectVisits: visits }),
+
+      setSubjectVisitItems: (items) => set({ subjectVisitItems: items }),
 
       setMedications: (medications) => set({ medications }),
 
@@ -372,6 +387,8 @@ export const useStore = create<AppStore>()(
           inclusionCriteria: [],
           exclusionCriteria: [],
           visitSchedule: [],
+          subjectVisits: [],
+          subjectVisitItems: [],
           medications: [],
           activeWorksheet: 1,
           isProcessing: false,
@@ -390,6 +407,8 @@ export const useStore = create<AppStore>()(
         inclusionCriteria: state.inclusionCriteria,
         exclusionCriteria: state.exclusionCriteria,
         visitSchedule: state.visitSchedule,
+        subjectVisits: state.subjectVisits,
+        subjectVisitItems: state.subjectVisitItems,
         medications: state.medications,
       }),
       // Version migration
@@ -431,6 +450,16 @@ export const useVisitSchedule = () => useStore((state) => state.visitSchedule);
  * Selector hook for medications
  */
 export const useMedications = () => useStore((state) => state.medications);
+
+/**
+ * Selector hook for subject visits
+ */
+export const useSubjectVisits = () => useStore((state) => state.subjectVisits);
+
+/**
+ * Selector hook for subject visit items
+ */
+export const useSubjectVisitItems = () => useStore((state) => state.subjectVisitItems);
 
 /**
  * Selector hook for active worksheet

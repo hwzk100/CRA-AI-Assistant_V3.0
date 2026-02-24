@@ -3,6 +3,7 @@
  * Uses ExcelJS for professional Excel generation with styling
  */
 import { InclusionCriteria, ExclusionCriteria, VisitSchedule, MedicationRecord } from '@shared/types/core';
+import { SubjectVisitData, SubjectVisitItemData } from '@shared/types/worksheet';
 import { Result } from '@shared/types/core';
 export interface ExcelExportOptions {
     /** Output file path */
@@ -21,6 +22,10 @@ export interface TrackerData {
     exclusionCriteria: ExclusionCriteria[];
     /** Visit schedule */
     visitSchedule: VisitSchedule[];
+    /** Subject visit data for time verification */
+    subjectVisits: SubjectVisitData[];
+    /** Subject visit item data for item time verification */
+    subjectVisitItems: SubjectVisitItemData[];
     /** Medication records */
     medications: MedicationRecord[];
 }
@@ -47,9 +52,15 @@ export declare class ExcelGenerator {
      */
     private createCriteriaSheet;
     /**
-     * Create Worksheet 2: Visit Schedule
+     * Create Worksheet 2: Visit Time Checklist
+     * 访视时间核对表
      */
-    private createVisitScheduleSheet;
+    private createVisitTimeChecklistSheet;
+    /**
+     * Create Worksheet 3: Visit Item Time Checklist
+     * 访视项目时间核对表
+     */
+    private createVisitItemTimeChecklistSheet;
     /**
      * Create Worksheet 3: Medication Records
      */

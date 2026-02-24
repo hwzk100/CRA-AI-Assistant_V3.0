@@ -18,6 +18,9 @@ declare const electronAPI: {
     extractCriteria: (protocolContent?: string) => Promise<any>;
     extractVisitSchedule: (protocolContent?: string) => Promise<any>;
     recognizeMedications: (subjectContent?: string) => Promise<any>;
+    extractSubjectNumber: (subjectContent?: string) => Promise<any>;
+    extractSubjectVisits: (subjectContent?: string, visitScheduleSummary?: string) => Promise<any>;
+    extractSubjectItems: (subjectContent?: string, visitItemsSummary?: string) => Promise<any>;
     chat: (message: string, context?: string) => Promise<any>;
     testConnection: () => Promise<any>;
     exportTracker: (data: {
@@ -25,6 +28,8 @@ declare const electronAPI: {
         inclusionCriteria: any[];
         exclusionCriteria: any[];
         visitSchedule: any[];
+        subjectVisits: any[];
+        subjectVisitItems: any[];
         medications: any[];
     }) => Promise<any>;
     getSettings: () => Promise<any>;

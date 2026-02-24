@@ -140,7 +140,8 @@ export const EXCEL_CONSTANTS = {
   // Worksheet names
   WORKSHEET_NAMES: {
     CRITERIA: '入排标准核对',
-    VISIT_SCHEDULE: '访视时间安排表',
+    VISIT_TIME_CHECKLIST: '访视时间核对表',
+    VISIT_ITEM_TIME_CHECKLIST: '访视项目时间核对表',
     MEDICATION: '合并用药和既往用药核对',
     SUMMARY: '汇总',
   },

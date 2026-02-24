@@ -182,4 +182,106 @@ export const setupAIHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | nu
       }
     }
   );
+
+  /**
+   * Extract subject number from medical records
+   */
+  ipcMain.handle(
+    'ai:extractSubjectNumber',
+    async (_event, { subjectContent }: { subjectContent: string }) => {
+      try {
+        const glmService = getGLMService();
+        if (!glmService) {
+          return {
+            success: false,
+            error: {
+              code: 'AI_NOT_INITIALIZED',
+              userMessage: 'AI服务未初始化，请先设置API密钥',
+              technicalMessage: 'GLM service not initialized',
+            },
+          };
+        }
+
+        const result = await glmService.extractSubjectNumber(subjectContent);
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            code: 'AI_EXTRACT_SUBJECT_NUMBER_FAILED',
+            userMessage: '提取受试者编号失败',
+            technicalMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    }
+  );
+
+  /**
+   * Extract subject visit dates from medical records
+   */
+  ipcMain.handle(
+    'ai:extractSubjectVisits',
+    async (_event, { subjectContent, visitScheduleSummary }: { subjectContent: string; visitScheduleSummary: string }) => {
+      try {
+        const glmService = getGLMService();
+        if (!glmService) {
+          return {
+            success: false,
+            error: {
+              code: 'AI_NOT_INITIALIZED',
+              userMessage: 'AI服务未初始化，请先设置API密钥',
+              technicalMessage: 'GLM service not initialized',
+            },
+          };
+        }
+
+        const result = await glmService.extractSubjectVisitDates(subjectContent, visitScheduleSummary);
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            code: 'AI_EXTRACT_SUBJECT_VISITS_FAILED',
+            userMessage: '提取受试者访视时间失败',
+            technicalMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    }
+  );
+
+  /**
+   * Extract subject visit item dates from medical records
+   */
+  ipcMain.handle(
+    'ai:extractSubjectItems',
+    async (_event, { subjectContent, visitItemsSummary }: { subjectContent: string; visitItemsSummary: string }) => {
+      try {
+        const glmService = getGLMService();
+        if (!glmService) {
+          return {
+            success: false,
+            error: {
+              code: 'AI_NOT_INITIALIZED',
+              userMessage: 'AI服务未初始化，请先设置API密钥',
+              technicalMessage: 'GLM service not initialized',
+            },
+          };
+        }
+
+        const result = await glmService.extractSubjectVisitItems(subjectContent, visitItemsSummary);
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            code: 'AI_EXTRACT_SUBJECT_ITEMS_FAILED',
+            userMessage: '提取受试者访视项目时间失败',
+            technicalMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    }
+  );
 };

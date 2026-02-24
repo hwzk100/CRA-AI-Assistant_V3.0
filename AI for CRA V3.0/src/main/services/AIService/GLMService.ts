@@ -28,6 +28,9 @@ import {
   CRITERIA_EXTRACTION_PROMPT,
   VISIT_SCHEDULE_EXTRACTION_PROMPT,
   MEDICATION_RECOGNITION_PROMPT,
+  SUBJECT_NUMBER_EXTRACTION_PROMPT,
+  SUBJECT_VISIT_DATES_PROMPT,
+  SUBJECT_VISIT_ITEMS_PROMPT,
 } from './prompts';
 
 // ============================================================================
@@ -756,6 +759,119 @@ export class GLMService {
     }));
 
     return ok(medications);
+  }
+
+  // ==========================================================================
+  // Subject Data Extraction Methods
+  // ==========================================================================
+
+  /**
+   * Extract subject number from medical records
+   */
+  async extractSubjectNumber(subjectContent: string): Promise<Result<string>> {
+    const truncatedContent = truncateContent(subjectContent, 2000);
+    const prompt = formatPrompt(SUBJECT_NUMBER_EXTRACTION_PROMPT, { content: truncatedContent });
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ]);
+    }, 'extractSubjectNumber');
+
+    if (responseResult.success === false) {
+      return err(responseResult.error);
+    }
+
+    const parseResult = this.parseJSONResponse<{ subjectNumber: string }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    return ok(parseResult.data.subjectNumber || '');
+  }
+
+  /**
+   * Extract subject visit dates from medical records
+   */
+  async extractSubjectVisitDates(
+    subjectContent: string,
+    visitScheduleSummary: string
+  ): Promise<Result<Array<{ visitScheduleId: string; actualVisitDate?: string; status: string; notes?: string }>>> {
+    const truncatedContent = truncateContent(subjectContent);
+    const prompt = formatPrompt(SUBJECT_VISIT_DATES_PROMPT, {
+      content: truncatedContent,
+      visitScheduleSummary,
+    });
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ]);
+    }, 'extractSubjectVisitDates');
+
+    if (responseResult.success === false) {
+      return err(responseResult.error);
+    }
+
+    const parseResult = this.parseJSONResponse<{
+      visits: Array<{
+        visitScheduleId: string;
+        actualVisitDate?: string;
+        status: string;
+        notes?: string;
+      }>;
+    }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    return ok(parseResult.data.visits || []);
+  }
+
+  /**
+   * Extract subject visit item dates from medical records
+   */
+  async extractSubjectVisitItems(
+    subjectContent: string,
+    visitItemsSummary: string
+  ): Promise<Result<Array<{ visitScheduleId: string; itemName: string; itemType: string; actualDate?: string; status: string; notes?: string }>>> {
+    const truncatedContent = truncateContent(subjectContent);
+    const prompt = formatPrompt(SUBJECT_VISIT_ITEMS_PROMPT, {
+      content: truncatedContent,
+      visitItemsSummary,
+    });
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ]);
+    }, 'extractSubjectVisitItems');
+
+    if (responseResult.success === false) {
+      return err(responseResult.error);
+    }
+
+    const parseResult = this.parseJSONResponse<{
+      items: Array<{
+        visitScheduleId: string;
+        itemName: string;
+        itemType: string;
+        actualDate?: string;
+        status: string;
+        notes?: string;
+      }>;
+    }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    return ok(parseResult.data.items || []);
   }
 
   /**
