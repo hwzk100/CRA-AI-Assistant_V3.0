@@ -20,6 +20,7 @@ import {
   Procedure,
   Assessment,
   MedicationRecord,
+  MessageContent,
 } from '@shared/types/core';
 import {
   formatPrompt,
@@ -40,6 +41,7 @@ import {
 export interface GLMConfig {
   apiKey: string;
   model?: string;
+  visionModel?: string;
   temperature?: number;
   topP?: number;
   maxTokens?: number;
@@ -156,7 +158,7 @@ class RateLimiter {
 // ============================================================================
 
 export class GLMService {
-  private config: Required<GLMConfig>;
+  private config: Omit<Required<GLMConfig>, 'visionModel'> & { visionModel?: string };
   private rateLimiter: RateLimiter;
   private baseURL: string;
   private initialized: boolean = false;
@@ -165,11 +167,12 @@ export class GLMService {
     this.config = {
       apiKey: config.apiKey,
       model: config.model || 'glm-4',
+      visionModel: config.visionModel || 'glm-4v',
       temperature: config.temperature || 0.3,
       topP: config.topP || 0.7,
-      maxTokens: config.maxTokens || 10000, // Increased to handle large visit schedules
-      timeout: config.timeout || 120000, // 120 seconds - increased for large requests
-      maxRetries: config.maxRetries || 3,
+      maxTokens: config.maxTokens || 8000, // Reduced from 10000 to improve reliability
+      timeout: config.timeout || 180000, // 180 seconds - increased for large requests
+      maxRetries: config.maxRetries || 2, // Reduced from 3 to fail faster on errors
       maxRequestsPerMinute: config.maxRequestsPerMinute || 60,
       proxy: config.proxy || '',
     };
@@ -328,9 +331,9 @@ export class GLMService {
     // Provide user-friendly error messages based on error code
     let userMessage = 'AI请求失败，请检查网络连接';
     if (errorCode === 'ECONNRESET') {
-      userMessage = 'API连接被服务器中断，可能是服务器繁忙或请求过大，请稍后重试';
+      userMessage = 'API连接被服务器中断。这通常是因为：1) 方案文档内容过大，请尝试上传较小的文档；2) GLM API服务器繁忙，请稍后重试；3) 网络不稳定，请检查网络连接';
     } else if (errorCode === 'ETIMEDOUT') {
-      userMessage = 'API请求超时，请检查网络连接或稍后重试';
+      userMessage = 'API请求超时，可能因为文档内容过大或网络较慢，请稍后重试或尝试较小的文档';
     } else if (errorCode === 'ENOTFOUND') {
       userMessage = '无法连接到API服务器，请检查网络设置';
     }
@@ -350,7 +353,11 @@ export class GLMService {
   /**
    * Call GLM API using native HTTPS
    */
-  private async callAPI(messages: Array<{ role: string; content: string }>): Promise<string> {
+  private async callAPI(
+    messages: Array<{ role: string; content: string | MessageContent[] }>,
+    useVision: boolean = false,
+    maxTokens?: number
+  ): Promise<string> {
     // Validate API key
     if (!this.config.apiKey || this.config.apiKey.trim().length === 0) {
       throw new Error('API 密钥未设置');
@@ -366,11 +373,11 @@ export class GLMService {
 
     // Prepare request body
     const requestBody = {
-      model: this.config.model,
+      model: useVision ? (this.config.visionModel || 'glm-4v') : this.config.model,
       messages,
       temperature: this.config.temperature,
       top_p: this.config.topP,
-      max_tokens: this.config.maxTokens,
+      max_tokens: maxTokens || this.config.maxTokens,
     };
 
     console.log('[GLM API] Sending request to:', this.baseURL);
@@ -638,14 +645,19 @@ export class GLMService {
    */
   async extractVisitSchedule(protocolContent: string): Promise<Result<VisitSchedule[]>> {
     console.log('[extractVisitSchedule] Starting extraction...');
-    const truncatedContent = truncateContent(protocolContent);
+    console.log('[extractVisitSchedule] Original content length:', protocolContent.length);
+    // Use more aggressive truncation for visit schedule (2300 tokens) due to large prompt size
+    const truncatedContent = truncateContent(protocolContent, 2300);
+    console.log('[extractVisitSchedule] Truncated content length:', truncatedContent.length);
     const prompt = formatPrompt(VISIT_SCHEDULE_EXTRACTION_PROMPT, { content: truncatedContent });
+    console.log('[extractVisitSchedule] Prompt length:', prompt.length);
 
     const responseResult = await this.callWithRetry(async () => {
+      // Use lower maxTokens for visit schedule to avoid timeout (4000 instead of default 10000)
       return await this.callAPI([
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt },
-      ]);
+      ], false, 4000);
     }, 'extractVisitSchedule');
 
     console.log('[extractVisitSchedule] Response result:', responseResult.success);
@@ -924,6 +936,237 @@ export class GLMService {
    */
   resetRateLimiter(): void {
     this.rateLimiter.reset();
+  }
+
+  // ==========================================================================
+  // Vision API Methods
+  // ==========================================================================
+
+  /**
+   * Extract text and information from image using GLM-4 Vision
+   */
+  async extractFromImage(
+    imageDataUrl: string,
+    prompt: string = '请识别这张图片中的所有文字内容，包括中文和英文。请按原文的格式和布局输出文字内容。'
+  ): Promise<Result<string>> {
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI(
+        [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageDataUrl } }
+            ]
+          }
+        ],
+        true // Use vision model
+      );
+    }, 'extractFromImage');
+
+    if (responseResult.success === false) {
+      return responseResult;
+    }
+
+    return ok(responseResult.data);
+  }
+
+  /**
+   * Extract criteria from protocol image using vision
+   */
+  async extractCriteriaFromImage(imageDataUrl: string): Promise<Result<CriteriaSet>> {
+    const prompt = formatPrompt(CRITERIA_EXTRACTION_PROMPT, { content: '[图片内容]' });
+    const visionPrompt = prompt + '\n\n请分析上传的图片内容，提取其中的入排标准信息。';
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: visionPrompt },
+              { type: 'image_url', image_url: { url: imageDataUrl } }
+            ]
+          }
+        ],
+        true
+      );
+    }, 'extractCriteriaFromImage');
+
+    if (responseResult.success === false) {
+      return responseResult;
+    }
+
+    // Parse JSON response (same as existing extractCriteria)
+    const parseResult = this.parseJSONResponse<{
+      inclusionCriteria: Array<{ number: string; description: string; category?: string }>;
+      exclusionCriteria: Array<{ number: string; description: string; category?: string }>;
+    }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    const data = parseResult.data;
+
+    // Transform to proper types
+    const inclusionCriteria: InclusionCriteria[] = (data.inclusionCriteria || []).map((item, index) => ({
+      id: `inc-${Date.now()}-${index}`,
+      number: item.number,
+      description: item.description,
+      category: item.category,
+      _aiExtracted: true,
+    }));
+
+    const exclusionCriteria: ExclusionCriteria[] = (data.exclusionCriteria || []).map((item, index) => ({
+      id: `exc-${Date.now()}-${index}`,
+      number: item.number,
+      description: item.description,
+      category: item.category,
+      _aiExtracted: true,
+    }));
+
+    return ok({
+      inclusionCriteria,
+      exclusionCriteria,
+    });
+  }
+
+  /**
+   * Extract visit schedule from protocol image using vision
+   */
+  async extractVisitScheduleFromImage(imageDataUrl: string): Promise<Result<VisitSchedule[]>> {
+    const prompt = formatPrompt(VISIT_SCHEDULE_EXTRACTION_PROMPT, { content: '[图片内容]' });
+    const visionPrompt = prompt + '\n\n请分析上传的图片内容，特别关注其中的流程表或访视计划表，提取访视计划信息。';
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: visionPrompt },
+              { type: 'image_url', image_url: { url: imageDataUrl } }
+            ]
+          }
+        ],
+        true
+      );
+    }, 'extractVisitScheduleFromImage');
+
+    if (responseResult.success === false) {
+      return responseResult;
+    }
+
+    // Parse JSON response
+    const parseResult = this.parseJSONResponse<{
+      visitSchedule: Array<{
+        visitNumber: string;
+        visitName: string;
+        windowStart: string;
+        windowEnd: string;
+        procedures: Array<{ name: string; category: string; timing: string; required?: boolean }>;
+        assessments: Array<{ name: string; type: string; timing: string; required?: boolean }>;
+      }>;
+    }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    const data = parseResult.data;
+
+    // Transform to proper types
+    const visitSchedule: VisitSchedule[] = (data.visitSchedule || []).map((item, index) => ({
+      id: `visit-${Date.now()}-${index}`,
+      visitNumber: item.visitNumber,
+      visitName: item.visitName,
+      windowStart: item.windowStart,
+      windowEnd: item.windowEnd,
+      procedures: (item.procedures || []).map((p, i) => ({
+        id: `proc-${Date.now()}-${index}-${i}`,
+        name: p.name,
+        category: p.category as 'screening' | 'treatment' | 'follow-up',
+        timing: p.timing,
+        required: p.required ?? true,
+      })),
+      assessments: (item.assessments || []).map((a, i) => ({
+        id: `assess-${Date.now()}-${index}-${i}`,
+        name: a.name,
+        type: a.type as 'vital' | 'lab' | 'ecg' | 'imaging' | 'questionnaire',
+        timing: a.timing,
+        required: a.required ?? true,
+      })),
+      _aiExtracted: true,
+    }));
+
+    return ok(visitSchedule);
+  }
+
+  /**
+   * Recognize medications from medical record image using vision
+   */
+  async recognizeMedicationsFromImage(imageDataUrl: string): Promise<Result<MedicationRecord[]>> {
+    const prompt = formatPrompt(MEDICATION_RECOGNITION_PROMPT, { content: '[图片内容]' });
+    const visionPrompt = prompt + '\n\n请分析这张医疗记录图片，识别并提取所有用药信息。';
+
+    const responseResult = await this.callWithRetry(async () => {
+      return await this.callAPI(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: visionPrompt },
+              { type: 'image_url', image_url: { url: imageDataUrl } }
+            ]
+          }
+        ],
+        true
+      );
+    }, 'recognizeMedicationsFromImage');
+
+    if (responseResult.success === false) {
+      return responseResult;
+    }
+
+    // Parse JSON response
+    const parseResult = this.parseJSONResponse<{
+      medications: Array<{
+        medicationName: string;
+        dosage: string;
+        frequency: string;
+        route: string;
+        startDate: string;
+        endDate?: string;
+        indication: string;
+        confidence: string;
+      }>;
+    }>(responseResult.data);
+
+    if (parseResult.success === false) {
+      return err(parseResult.error);
+    }
+
+    const data = parseResult.data;
+
+    // Transform to proper types
+    const medications: MedicationRecord[] = (data.medications || []).map((item, index) => ({
+      id: `med-${Date.now()}-${index}`,
+      medicationName: item.medicationName,
+      dosage: item.dosage,
+      frequency: item.frequency,
+      route: item.route,
+      startDate: new Date(item.startDate),
+      endDate: item.endDate ? new Date(item.endDate) : undefined,
+      indication: item.indication,
+      _aiRecognized: true,
+      _confidence: item.confidence as 'high' | 'medium' | 'low',
+    }));
+
+    return ok(medications);
   }
 }
 
