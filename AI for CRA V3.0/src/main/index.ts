@@ -53,15 +53,26 @@ function createWindow(): void {
   // Load the app
   console.log('Loading app...');
   console.log('__dirname:', __dirname);
-  console.log('Renderer path:', join(__dirname, '../renderer/index.html'));
+  console.log('NODE_ENV:', process.env.NODE_ENV);
 
   if (process.env.NODE_ENV === 'development') {
-    console.log('Loading from dev server: http://localhost:3000');
-    mainWindow.loadURL('http://localhost:3000');
+    const devServerUrl = 'http://localhost:3000';
+    console.log('Loading from dev server:', devServerUrl);
+    mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools();
   } else {
-    console.log('Loading from file:', join(__dirname, '../renderer/index.html'));
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    // In production, __dirname is dist/main, so renderer is at ../renderer
+    const rendererPath = join(__dirname, '../renderer/index.html');
+    console.log('Loading from file:', rendererPath);
+    mainWindow.loadFile(rendererPath).catch((error) => {
+      console.error('Failed to load renderer:', error);
+      // Try alternative path
+      const altPath = join(__dirname, '../../renderer/index.html');
+      console.log('Trying alternative path:', altPath);
+      mainWindow.loadFile(altPath).catch((altError) => {
+        console.error('Failed to load from alternative path:', altError);
+      });
+    });
   }
 
   // Show window when ready
@@ -120,16 +131,20 @@ function createWindow(): void {
 app.whenReady().then(() => {
   console.log('App is ready');
 
-  // Initialize GLM service with default API key
+  // Initialize GLM service with default settings
   const { createGLMService } = require('./services/AIService/GLMService');
   const { DEFAULT_SETTINGS } = require('@shared/types/core');
   if (DEFAULT_SETTINGS.apiKey) {
     const glmService = createGLMService({
       apiKey: DEFAULT_SETTINGS.apiKey,
+      model: DEFAULT_SETTINGS.model,
+      visionModel: DEFAULT_SETTINGS.visionModel,
     });
     const initResult = glmService.initialize();
     if (initResult.success) {
-      console.log('GLM service initialized with default API key');
+      console.log('GLM service initialized with default settings');
+      console.log('Model:', DEFAULT_SETTINGS.model);
+      console.log('Vision Model:', DEFAULT_SETTINGS.visionModel);
     } else {
       console.log('GLM service initialization failed:', initResult.error);
     }

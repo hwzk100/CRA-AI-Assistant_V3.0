@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最小测试 - CRA AI Assistant</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+    }
+    .status {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .status.ok { border-left: 4px solid #10b981; }
+    .status.error { border-left: 4px solid #ef4444; }
+    h1 { margin-top: 0; }
+    #app {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div class="status ok">
+    <h2>✓ HTML 加载成功</h2>
+  </div>
+
+  <div class="status ok">
+    <h2>✓ CSS 样式加载成功</h2>
+  </div>
+
+  <div class="status" id="js-status">
+    <h2>⏳ JavaScript 检查中...</h2>
+  </div>
+
+  <div class="status" id="electron-status">
+    <h2>⏳ Electron API 检查中...</h2>
+  </div>
+
+  <div class="status" id="react-status">
+    <h2>⏳ React 检查中...</h2>
+  </div>
+
+  <div id="app"></div>
+
+  <script>
+    // 更新 JS 状态
+    document.getElementById('js-status').className = 'status ok';
+    document.getElementById('js-status').innerHTML = '<h2>✓ JavaScript 运行正常</h2>';
+
+    // 检查 Electron API
+    const electronStatus = document.getElementById('electron-status');
+    if (window.electronAPI) {
+      electronStatus.className = 'status ok';
+      electronStatus.innerHTML = '<h2>✓ Electron API 可用</h2>';
+    } else {
+      electronStatus.className = 'status error';
+      electronStatus.innerHTML = '<h2>✗ Electron API 不可用 (这是正常的，如果在浏览器中打开)</h2>';
+    }
+
+    // 检查 React
+    const reactStatus = document.getElementById('react-status');
+    if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined') {
+      reactStatus.className = 'status ok';
+      reactStatus.innerHTML = '<h2>✓ React 和 ReactDOM 已加载</h2>';
+
+      // 创建一个简单的 React 应用
+      try {
+        const { createElement } = React;
+        const { createRoot } = ReactDOM;
+
+        const App = () => {
+          const [count, setCount] = React.useState(0);
+
+          return createElement('div', null,
+            createElement('h2', null, '✓ React 渲染成功！'),
+            createElement('p', null, `计数器: ${count}`),
+            createElement('button', {
+              onClick: () => setCount(count + 1),
+              style: {
+                padding: '10px 20px',
+                fontSize: '16px',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }
+            }, '点击增加')
+          );
+        };
+
+        const root = createRoot(document.getElementById('app'));
+        root.render(createElement(App));
+
+        console.log('React 应用渲染成功');
+      } catch (error) {
+        reactStatus.className = 'status error';
+        reactStatus.innerHTML = `<h2>✗ React 渲染失败: ${error.message}</h2>`;
+        console.error('React 渲染错误:', error);
+      }
+    } else {
+      reactStatus.className = 'status error';
+      reactStatus.innerHTML = '<h2>✗ React 未加载</h2>';
+    }
+
+    // 检查错误
+    window.addEventListener('error', (event) => {
+      console.error('全局错误:', event.error);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('未处理的 Promise 拒绝:', event.reason);
+    });
+
+    console.log('页面初始化完成');
+  </script>
+
+  <!-- 如果在 Electron 环境中，这些脚本会被注入 -->
+</body>
+</html>

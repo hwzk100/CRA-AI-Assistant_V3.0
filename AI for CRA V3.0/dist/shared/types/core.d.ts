@@ -165,12 +165,35 @@ export interface FileInfo {
     completedAt?: Date;
     /** Extracted text content (for PDF/images) */
     extractedText?: string;
+    /** Image data URL for vision API (only for images) */
+    imageDataUrl?: string;
+    /** Whether image was processed with vision API */
+    processedWithVision?: boolean;
     /** Processing progress (0-100) */
     progress: number;
     /** Error message if failed */
     error?: string;
     /** Preview URL (for images) */
     previewUrl?: string;
+}
+/**
+ * Content types for multimodal messages
+ */
+export type MessageContent = {
+    type: 'text';
+    text: string;
+} | {
+    type: 'image_url';
+    image_url: {
+        url: string;
+    };
+};
+/**
+ * Extended message format supporting multimodal content
+ */
+export interface MultimodalMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string | MessageContent[];
 }
 /**
  * API configuration
@@ -213,6 +236,7 @@ export declare const IPCChannel: {
     readonly AI_EXTRACT_SUBJECT_VISITS: "ai:extractSubjectVisits";
     readonly AI_EXTRACT_SUBJECT_ITEMS: "ai:extractSubjectItems";
     readonly AI_CHAT: "ai:chat";
+    readonly AI_EXTRACT_FROM_IMAGE: "ai:extractFromImage";
     readonly EXCEL_EXPORT: "excel:export";
     readonly EXCEL_EXPORT_TRACKER: "excel:exportTracker";
     readonly SETTINGS_GET: "settings:get";
@@ -265,6 +289,10 @@ export type IPCRequestPayload = {
         message: string;
         context?: string;
     };
+    'ai:extractFromImage': {
+        imageDataUrl: string;
+        prompt?: string;
+    };
     'excel:exportTracker': {
         outputPath: string;
     };
@@ -307,6 +335,7 @@ export type IPCResponsePayload = {
         notes?: string;
     }>>;
     'ai:chat': Result<string>;
+    'ai:extractFromImage': Result<string>;
     [IPCChannel.SETTINGS_GET]: Result<AppSettings>;
     'excel:exportTracker': Result<string>;
     'settings:set': Result<void>;
@@ -315,11 +344,23 @@ export type IPCResponsePayload = {
     'system:openExternal': Result<void>;
 };
 /**
+ * Supported GLM text analysis models
+ */
+export type GLMModel = 'glm-4' | 'glm-4-flash';
+/**
+ * Supported GLM vision models for image analysis
+ */
+export type GLMVisionModel = 'glm-4v' | 'glm-4v-flash';
+/**
  * Application settings
  */
 export interface AppSettings {
     /** GLM-4 API key */
     apiKey: string;
+    /** Text analysis model */
+    model: GLMModel;
+    /** Image analysis model */
+    visionModel: GLMVisionModel;
     /** Theme preference */
     theme: 'light' | 'dark';
     /** Language preference */

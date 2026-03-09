@@ -284,4 +284,38 @@ export const setupAIHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | nu
       }
     }
   );
+
+  /**
+   * Extract text from image using vision API
+   */
+  ipcMain.handle(
+    'ai:extractFromImage',
+    async (_event, { imageDataUrl, prompt }: { imageDataUrl: string; prompt?: string }) => {
+      try {
+        const glmService = getGLMService();
+        if (!glmService) {
+          return {
+            success: false,
+            error: {
+              code: 'AI_NOT_INITIALIZED',
+              userMessage: 'AI服务未初始化',
+              technicalMessage: 'GLM service not initialized',
+            },
+          };
+        }
+
+        const result = await glmService.extractFromImage(imageDataUrl, prompt);
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            code: 'AI_IMAGE_EXTRACT_FAILED',
+            userMessage: '图片识别失败',
+            technicalMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    }
+  );
 };

@@ -1,0 +1,74 @@
+{
+  "protocolFile": "D:\\CRA AI\\CRA-AI-Assistant_V3.0\\test-protocol.txt",
+  "protocolLength": 2114,
+  "expectedVisits": [
+    {
+      "visitName": "筛选期访视",
+      "windowStart": "Day -28",
+      "windowEnd": "Day -1"
+    },
+    {
+      "visitName": "基线访视",
+      "windowStart": "Day 1",
+      "windowEnd": "Day 1"
+    },
+    {
+      "visitName": "C1D1",
+      "windowStart": "C1D1",
+      "windowEnd": "C1D1 ± 2天"
+    },
+    {
+      "visitName": "C1D8",
+      "windowStart": "C1D8",
+      "windowEnd": "C1D8 ± 1天"
+    },
+    {
+      "visitName": "C2D1",
+      "windowStart": "C2D1",
+      "windowEnd": "C2D1 ± 2天"
+    },
+    {
+      "visitName": "C2D8",
+      "windowStart": "C2D8",
+      "windowEnd": "C2D8 ± 1天"
+    },
+    {
+      "visitName": "C3D1",
+      "windowStart": "C3D1",
+      "windowEnd": "C3D1 ± 2天"
+    },
+    {
+      "visitName": "C4D1",
+      "windowStart": "C4D1",
+      "windowEnd": "C4D1 ± 2天"
+    },
+    {
+      "visitName": "C5D1",
+      "windowStart": "C5D1",
+      "windowEnd": "C5D1 ± 2天"
+    },
+    {
+      "visitName": "C6D1",
+      "windowStart": "C6D1",
+      "windowEnd": "C6D1 ± 2天"
+    },
+    {
+      "visitName": "随访1",
+      "windowStart": "最后一次给药后28天",
+      "windowEnd": "最后一次给药后28天 ± 7天"
+    },
+    {
+      "visitName": "随访2",
+      "windowStart": "Week 24",
+      "windowEnd": "Week 24 ± 14天"
+    }
+  ],
+  "testDate": "2026-03-09T17:57:59.310Z",
+  "promptChanges": [
+    "Time window extraction moved to requirement #2",
+    "Added 6 extraction rules",
+    "Enhanced examples with complete time windows",
+    "Added 5-level priority extraction system",
+    "Added emphasis markers 【重要】"
+  ]
+}

@@ -73,9 +73,32 @@ export declare const FILE_CONSTANTS: {
 export declare const AI_CONSTANTS: {
     readonly MODEL: {
         readonly NAME: "glm-4";
+        readonly VISION_NAME: "glm-4v";
         readonly MAX_TOKENS: 4096;
         readonly TEMPERATURE: 0.3;
         readonly TOP_P: 0.7;
+    };
+    readonly MODEL_OPTIONS: readonly [{
+        readonly value: "glm-4";
+        readonly label: "GLM-4 标准版";
+        readonly description: "适用于复杂文本分析，准确度高";
+    }, {
+        readonly value: "glm-4-flash";
+        readonly label: "GLM-4 Flash";
+        readonly description: "快速响应，适合简单文本任务";
+    }];
+    readonly VISION_MODEL_OPTIONS: readonly [{
+        readonly value: "glm-4v";
+        readonly label: "GLM-4V 标准版";
+        readonly description: "高精度图片识别，适合复杂图像";
+    }, {
+        readonly value: "glm-4v-flash";
+        readonly label: "GLM-4V Flash";
+        readonly description: "快速图片识别，适合简单图像处理";
+    }];
+    readonly IMAGE: {
+        readonly MAX_SIZE: number;
+        readonly SUPPORTED_FORMATS: readonly [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
     };
     readonly RATE_LIMIT: {
         readonly REQUESTS_PER_MINUTE: 60;

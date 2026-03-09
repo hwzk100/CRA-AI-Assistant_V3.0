@@ -6,7 +6,21 @@
       "Bash(tree:*)",
       "Bash(dir:*)",
       "Bash(if exist dist rmdir /s /q dist)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__web-search-prime__web_search_prime",
+      "mcp__web-reader__webReader",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:)",
+      "Bash(taskkill:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(npm start:*)",
+      "Bash(node:*)",
+      "Bash(python:*)",
+      "Bash(unzip:*)",
+      "Bash(tasklist:*)"
     ]
   }
 }

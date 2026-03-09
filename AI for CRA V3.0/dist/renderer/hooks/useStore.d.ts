@@ -112,31 +112,13 @@ export declare const useStore: import("zustand").UseBoundStore<Omit<import("zust
     setState(partial: AppStore | Partial<AppStore> | ((state: AppStore) => AppStore | Partial<AppStore>), replace?: false): unknown;
     setState(state: AppStore | ((state: AppStore) => AppStore), replace: true): unknown;
     persist: {
-        setOptions: (options: Partial<import("zustand/middleware").PersistOptions<AppStore, {
-            settings: AppSettings;
-            apiKey: string;
-            inclusionCriteria: InclusionCriteria[];
-            exclusionCriteria: ExclusionCriteria[];
-            visitSchedule: VisitSchedule[];
-            subjectVisits: SubjectVisitData[];
-            subjectVisitItems: SubjectVisitItemData[];
-            medications: MedicationRecord[];
-        }, unknown>>) => void;
+        setOptions: (options: Partial<import("zustand/middleware").PersistOptions<AppStore, any, unknown>>) => void;
         clearStorage: () => void;
         rehydrate: () => Promise<void> | void;
         hasHydrated: () => boolean;
         onHydrate: (fn: (state: AppStore) => void) => () => void;
         onFinishHydration: (fn: (state: AppStore) => void) => () => void;
-        getOptions: () => Partial<import("zustand/middleware").PersistOptions<AppStore, {
-            settings: AppSettings;
-            apiKey: string;
-            inclusionCriteria: InclusionCriteria[];
-            exclusionCriteria: ExclusionCriteria[];
-            visitSchedule: VisitSchedule[];
-            subjectVisits: SubjectVisitData[];
-            subjectVisitItems: SubjectVisitItemData[];
-            medications: MedicationRecord[];
-        }, unknown>>;
+        getOptions: () => Partial<import("zustand/middleware").PersistOptions<AppStore, any, unknown>>;
     };
 }>;
 /**

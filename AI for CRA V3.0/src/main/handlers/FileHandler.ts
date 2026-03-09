@@ -6,7 +6,6 @@ import { IpcMain, BrowserWindow } from 'electron';
 import { join, extname, basename } from 'path';
 import { promises as fsPromises } from 'fs';
 import * as pdfParse from 'pdf-parse';
-import Tesseract from 'tesseract.js';
 import AdmZip from 'adm-zip';
 
 // ============================================================================
@@ -39,13 +38,32 @@ async function processPDF(filePath: string): Promise<string> {
 }
 
 /**
- * Process image file - OCR text extraction
+ * Convert image file to base64 data URL for vision API
  */
-async function processImage(filePath: string): Promise<string> {
-  const worker = await Tesseract.createWorker('chi_sim+eng');
-  const { data: { text } } = await worker.recognize(filePath);
-  await worker.terminate();
-  return text;
+async function imageToBase64(filePath: string): Promise<string> {
+  const stats = await fsPromises.stat(filePath);
+
+  // Check file size (limit to 10MB)
+  const MAX_SIZE = 10 * 1024 * 1024;
+  if (stats.size > MAX_SIZE) {
+    throw new Error(`图片文件过大: ${stats.size} bytes (最大: ${MAX_SIZE})`);
+  }
+
+  // Read file and convert to base64
+  const buffer = await fsPromises.readFile(filePath);
+  const ext = extname(filePath).toLowerCase().substring(1);
+  const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+  const base64 = buffer.toString('base64');
+  return `data:${mimeType};base64,${base64}`;
+}
+
+/**
+ * Process image file - prepare for vision API
+ * Returns base64 data URL instead of OCR text
+ */
+async function processImage(filePath: string): Promise<{ dataUrl: string }> {
+  const dataUrl = await imageToBase64(filePath);
+  return { dataUrl };
 }
 
 /**
@@ -108,9 +126,12 @@ export const setupFileHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | 
             break;
 
           case 'image':
-            fileInfo.status = 'ocr_processing';
+            fileInfo.status = 'processing';
             fileInfo.progress = 30;
-            extractedText = await processImage(filePath);
+            const imageResult = await processImage(filePath);
+            (fileInfo as any).imageDataUrl = imageResult.dataUrl;
+            extractedText = ''; // Will be filled by AI if needed
+            (fileInfo as any).processedWithVision = true;
             break;
 
           case 'archive':

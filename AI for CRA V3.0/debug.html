@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRA AI Debug</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f9f9f9;
+      border-left: 4px solid #007bff;
+    }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+    .info { color: #666; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #0056b3; }
+    #console-output {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .log-entry { margin: 5px 0; }
+    .log-info { color: #4ec9b0; }
+    .log-warn { color: #dcdcaa; }
+    .log-error { color: #f48771; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 CRA AI Assistant 调试页面</h1>
+
+    <div class="test-section">
+      <h2>基础检查</h2>
+      <div id="basic-checks"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>环境检查</h2>
+      <div id="env-checks"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>API测试</h2>
+      <button onclick="testElectronAPI()">测试 Electron API</button>
+      <button onclick="testWindowElectronAPI()">测试 window.electronAPI</button>
+      <div id="api-results"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>控制台输出</h2>
+      <button onclick="clearConsole()">清空控制台</button>
+      <div id="console-output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>操作</h2>
+      <button onclick="loadMainApp()">加载主应用</button>
+      <button onclick="location.reload()">刷新页面</button>
+    </div>
+  </div>
+
+  <script>
+    // 拦截控制台输出
+    const consoleOutput = document.getElementById('console-output');
+    const originalConsole = {
+      log: console.log,
+      warn: console.warn,
+      error: console.error,
+      info: console.info
+    };
+
+    function addLogEntry(method, args) {
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${method}`;
+      const message = Array.from(args).map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      entry.textContent = `[${method.toUpperCase()}] ${message}`;
+      consoleOutput.appendChild(entry);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
+    console.log = function(...args) {
+      originalConsole.log(...args);
+      addLogEntry('info', args);
+    };
+    console.warn = function(...args) {
+      originalConsole.warn(...args);
+      addLogEntry('warn', args);
+    };
+    console.error = function(...args) {
+      originalConsole.error(...args);
+      addLogEntry('error', args);
+    };
+    console.info = function(...args) {
+      originalConsole.info(...args);
+      addLogEntry('info', args);
+    };
+
+    // 基础检查
+    function runBasicChecks() {
+      const container = document.getElementById('basic-checks');
+      const checks = [
+        { name: 'JavaScript', test: () => true },
+        { name: 'DOM加载完成', test: () => document.readyState === 'complete' || document.readyState === 'interactive' },
+        { name: 'React可用', test: () => typeof React !== 'undefined' },
+        { name: 'ReactDOM可用', test: () => typeof ReactDOM !== 'undefined' }
+      ];
+
+      container.innerHTML = checks.map(check => {
+        const passed = check.test();
+        return `<div class="${passed ? 'success' : 'error'}">${passed ? '✓' : '✗'} ${check.name}</div>`;
+      }).join('');
+    }
+
+    // 环境检查
+    function runEnvChecks() {
+      const container = document.getElementById('env-checks');
+      const checks = [
+        { name: 'Node环境', test: () => typeof process !== 'undefined' },
+        { name: 'Electron环境', test: () => typeof window !== 'undefined' && window.process && window.process.type === 'renderer' },
+        { name: 'window.electronAPI存在', test: () => typeof window.electronAPI !== 'undefined' },
+        { name: 'require函数存在', test: () => typeof require !== 'undefined' }
+      ];
+
+      container.innerHTML = checks.map(check => {
+        const passed = check.test();
+        return `<div class="${passed ? 'success' : 'error'}">${passed ? '✓' : '✗'} ${check.name}</div>`;
+      }).join('');
+
+      // 显示环境信息
+      const envInfo = `
+        <div class="info">
+          <strong>环境信息:</strong><br>
+          UserAgent: ${navigator.userAgent}<br>
+          Platform: ${navigator.platform}<br>
+          Language: ${navigator.language}<br>
+          Document ReadyState: ${document.readyState}
+        </div>
+      `;
+      container.innerHTML += envInfo;
+    }
+
+    // API测试
+    function testElectronAPI() {
+      const container = document.getElementById('api-results');
+      try {
+        if (typeof window.electronAPI !== 'undefined') {
+          const methods = Object.keys(window.electronAPI);
+          container.innerHTML = `
+            <div class="success">✓ window.electronAPI 存在</div>
+            <div class="info">可用方法: ${methods.join(', ')}</div>
+          `;
+        } else {
+          container.innerHTML = '<div class="error">✗ window.electronAPI 不存在</div>';
+        }
+      } catch (error) {
+        container.innerHTML = `<div class="error">✗ 错误: ${error.message}</div>`;
+      }
+    }
+
+    function testWindowElectronAPI() {
+      const container = document.getElementById('api-results');
+      try {
+        container.innerHTML = '<div class="info">测试中...</div>';
+
+        if (window.electronAPI && window.electronAPI.getVersion) {
+          window.electronAPI.getVersion().then(result => {
+            if (result.success) {
+              container.innerHTML = `<div class="success">✓ API调用成功! 版本: ${result.data}</div>`;
+            } else {
+              container.innerHTML = `<div class="error">✗ API调用失败: ${result.error?.userMessage}</div>`;
+            }
+          }).catch(error => {
+            container.innerHTML = `<div class="error">✗ API调用异常: ${error.message}</div>`;
+          });
+        } else {
+          container.innerHTML = '<div class="error">✗ getVersion 方法不存在</div>';
+        }
+      } catch (error) {
+        container.innerHTML = `<div class="error">✗ 错误: ${error.message}</div>`;
+      }
+    }
+
+    function clearConsole() {
+      consoleOutput.innerHTML = '';
+    }
+
+    function loadMainApp() {
+      window.location.href = 'index.html';
+    }
+
+    // 页面加载完成后运行检查
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('调试页面已加载');
+      runBasicChecks();
+      runEnvChecks();
+    });
+
+    // 监听错误
+    window.addEventListener('error', (event) => {
+      console.error('全局错误:', event.error);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('未处理的Promise拒绝:', event.reason);
+    });
+  </script>
+</body>
+</html>

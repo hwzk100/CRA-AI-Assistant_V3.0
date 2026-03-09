@@ -212,12 +212,35 @@ export interface FileInfo {
   completedAt?: Date;
   /** Extracted text content (for PDF/images) */
   extractedText?: string;
+  /** Image data URL for vision API (only for images) */
+  imageDataUrl?: string;
+  /** Whether image was processed with vision API */
+  processedWithVision?: boolean;
   /** Processing progress (0-100) */
   progress: number;
   /** Error message if failed */
   error?: string;
   /** Preview URL (for images) */
   previewUrl?: string;
+}
+
+// ============================================================================
+// Multimodal Message Types for Vision API
+// ============================================================================
+
+/**
+ * Content types for multimodal messages
+ */
+export type MessageContent =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+/**
+ * Extended message format supporting multimodal content
+ */
+export interface MultimodalMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | MessageContent[];
 }
 
 // ============================================================================
@@ -271,6 +294,7 @@ export const IPCChannel = {
   AI_EXTRACT_SUBJECT_VISITS: 'ai:extractSubjectVisits',
   AI_EXTRACT_SUBJECT_ITEMS: 'ai:extractSubjectItems',
   AI_CHAT: 'ai:chat',
+  AI_EXTRACT_FROM_IMAGE: 'ai:extractFromImage',
   EXCEL_EXPORT: 'excel:export',
   EXCEL_EXPORT_TRACKER: 'excel:exportTracker',
   SETTINGS_GET: 'settings:get',
@@ -325,6 +349,10 @@ export type IPCRequestPayload = {
     message: string;
     context?: string;
   };
+  'ai:extractFromImage': {
+    imageDataUrl: string;
+    prompt?: string;
+  };
   'excel:exportTracker': {
     outputPath: string;
   };
@@ -356,6 +384,7 @@ export type IPCResponsePayload = {
   'ai:extractSubjectVisits': Result<Array<{ visitScheduleId: string; actualVisitDate?: string; status: string; notes?: string }>>;
   'ai:extractSubjectItems': Result<Array<{ visitScheduleId: string; itemName: string; itemType: string; actualDate?: string; status: string; notes?: string }>>;
   'ai:chat': Result<string>;
+  'ai:extractFromImage': Result<string>;
   [IPCChannel.EXCEL_EXPORT_TRACKER]: Result<string>;
   [IPCChannel.SETTINGS_GET]: Result<AppSettings>;
   'excel:exportTracker': Result<string>;
@@ -370,11 +399,25 @@ export type IPCResponsePayload = {
 // ============================================================================
 
 /**
+ * Supported GLM text analysis models
+ */
+export type GLMModel = 'glm-4' | 'glm-4-flash';
+
+/**
+ * Supported GLM vision models for image analysis
+ */
+export type GLMVisionModel = 'glm-4v' | 'glm-4v-flash';
+
+/**
  * Application settings
  */
 export interface AppSettings {
   /** GLM-4 API key */
   apiKey: string;
+  /** Text analysis model */
+  model: GLMModel;
+  /** Image analysis model */
+  visionModel: GLMVisionModel;
   /** Theme preference */
   theme: 'light' | 'dark';
   /** Language preference */
@@ -394,6 +437,8 @@ export interface AppSettings {
  */
 export const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '07b90939b67f4170bc77dc79038bff91.DAZoHzF7duEhH3NM',
+  model: 'glm-4',
+  visionModel: 'glm-4v-flash', // Changed default to flash model for faster response
   theme: 'light',
   language: 'zh-CN',
   autoSave: true,

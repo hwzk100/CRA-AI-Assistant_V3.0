@@ -17,6 +17,31 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ============================================================================
+// Subject Info Types for Visit Time Checklist
+// ============================================================================
+
+/**
+ * Subject information for the visit time checklist
+ * 对应受试者信息列（A-G列）
+ */
+export interface SubjectInfo {
+  /** 中心编号 */
+  centerNumber: string;
+  /** 筛选号 */
+  screeningNumber: string;
+  /** 姓名缩写 */
+  initials: string;
+  /** 签知情日期 */
+  informedConsentDate?: string;
+  /** 入组日期 */
+  enrollmentDate?: string;
+  /** 组别 */
+  group?: string;
+  /** 患者当前状态 */
+  currentStatus?: string;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -222,59 +247,226 @@ export class ExcelGenerator {
   ): Promise<void> {
     const sheet = this.workbook.addWorksheet(EXCEL_CONSTANTS.WORKSHEET_NAMES.VISIT_TIME_CHECKLIST);
 
+    // Sort visits: screening/baseline first, then by protocol order
+    const sortedVisits = this.sortVisitsForChecklist(visitSchedule);
+
     // Group visits by subject number
-    const visitsBySubject = new Map<string, SubjectVisitData[]>();
+    const visitsBySubject = new Map<string, Map<string, SubjectVisitData>>();
     subjectVisits.forEach((visit) => {
       if (!visitsBySubject.has(visit.subjectNumber)) {
-        visitsBySubject.set(visit.subjectNumber, []);
+        visitsBySubject.set(visit.subjectNumber, new Map());
       }
-      visitsBySubject.get(visit.subjectNumber)!.push(visit);
+      visitsBySubject.get(visit.subjectNumber)!.set(visit.visitScheduleId, visit);
     });
 
     // Get unique subject numbers sorted
     const subjectNumbers = Array.from(visitsBySubject.keys()).sort();
 
-    // Build columns: first column is "受试者编号", then each visit is a column
-    const columns: Array<{ header: string; key: string; width: number }> = [
-      { header: '受试者编号', key: 'subjectNumber', width: EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW },
+    // Column headers for subject info (A-G columns)
+    const subjectInfoHeaders = [
+      '中心编号',
+      '筛选号',
+      '姓名缩写',
+      '签知情日期',
+      '入组日期',
+      '组别',
+      '患者当前状态',
     ];
 
-    visitSchedule.forEach((visit) => {
-      columns.push({
-        header: `${visit.visitNumber}-${visit.visitName}\n${visit.windowStart}~${visit.windowEnd}`,
-        key: `visit_${visit.id}`,
-        width: EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM,
-      });
-    });
+    // Build all column headers (Row 1)
+    const row1Headers: string[] = [
+      ...subjectInfoHeaders,
+      ...sortedVisits.map(v => this.generateVisitColumnLabel(v))
+    ];
 
-    sheet.columns = columns;
+    // Build time window headers (Row 2)
+    const row2Headers: string[] = [
+      '', '', '', '', '', '', '',  // Empty for subject info columns
+      ...sortedVisits.map(v => this.formatTimeWindow(v.windowStart, v.windowEnd))
+    ];
 
+    // Add Row 1: Main headers
+    const headerRow1 = sheet.addRow(row1Headers);
+    // Add Row 2: Time windows
+    const headerRow2 = sheet.addRow(row2Headers);
+
+    // Style both header rows
     if (this.options.applyStyling) {
-      this.styleHeader(sheet);
+      this.styleDoubleHeaderRow(sheet, headerRow1, headerRow2);
     }
 
-    // Add rows for each subject
-    subjectNumbers.forEach((subjectNumber) => {
-      const rowData: Record<string, string> = { subjectNumber };
+    // Set column widths
+    sheet.getColumn(1).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW;  // 中心编号
+    sheet.getColumn(2).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW;  // 筛选号
+    sheet.getColumn(3).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW;  // 姓名缩写
+    sheet.getColumn(4).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW;  // 签知情日期
+    sheet.getColumn(5).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.NARROW;  // 入组日期
+    sheet.getColumn(6).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM;  // 组别
+    sheet.getColumn(7).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM;  // 患者当前状态
+    for (let i = 0; i < sortedVisits.length; i++) {
+      sheet.getColumn(8 + i).width = EXCEL_CONSTANTS.COLUMN_WIDTHS.MEDIUM;
+    }
 
-      const subjectVisitList = visitsBySubject.get(subjectNumber) || [];
-      subjectVisitList.forEach((visit) => {
-        const key = `visit_${visit.visitScheduleId}`;
-        if (visit.actualVisitDate) {
-          rowData[key] = visit.actualVisitDate;
-        } else if (visit.status === 'not_applicable') {
-          rowData[key] = 'N/A';
-        } else if (visit.status === 'missed') {
-          rowData[key] = '错过';
-        } else if (visit.status === 'pending') {
-          rowData[key] = '待进行';
+    // Add data rows for each subject
+    subjectNumbers.forEach((subjectNumber) => {
+      const subjectVisitMap = visitsBySubject.get(subjectNumber) || new Map();
+
+      // Build row data: 7 columns of subject info + visit dates
+      const rowData: string[] = [];
+
+      // Add subject info columns (will be populated with actual data if available)
+      // For now, use subjectNumber as the key identifier
+      rowData.push(
+        '',                    // 中心编号 - to be filled
+        subjectNumber,         // 筛选号 - use subjectNumber as default
+        '',                    // 姓名缩写 - to be filled
+        '',                    // 签知情日期 - to be filled
+        '',                    // 入组日期 - to be filled
+        '',                    // 组别 - to be filled
+        ''                     // 患者当前状态 - to be filled
+      );
+
+      // Add visit date ranges for each visit
+      sortedVisits.forEach((visit) => {
+        const visitData = subjectVisitMap.get(visit.id);
+        if (visitData?.actualVisitDate) {
+          rowData.push(visitData.actualVisitDate);
+        } else if (visitData?.status === 'not_applicable') {
+          rowData.push('N/A');
+        } else if (visitData?.status === 'missed') {
+          rowData.push('错过');
+        } else if (visitData?.status === 'pending') {
+          rowData.push('待进行');
         } else {
-          rowData[key] = '';
+          rowData.push('');
         }
       });
 
       sheet.addRow(rowData);
     });
+  }
+
+  // ==========================================================================
+  // Helper Methods for Visit Time Checklist
+  // ==========================================================================
+
+  /**
+   * Sort visits for checklist: screening/baseline visits first, then by protocol order
+   */
+  private sortVisitsForChecklist(visits: VisitSchedule[]): VisitSchedule[] {
+    // Define visit priority: screening/baseline should come first
+    const screeningKeywords = ['筛选', 'screening', '基线', 'baseline'];
+
+    const withPriority = visits.map(v => {
+      const lowerName = v.visitName.toLowerCase();
+      const isScreeningOrBaseline = screeningKeywords.some(kw =>
+        lowerName.includes(kw.toLowerCase())
+      );
+      return {
+        visit: v,
+        priority: isScreeningOrBaseline ? 0 : 1,
+        order: visits.indexOf(v)
+      };
+    });
+
+    // Sort by priority first, then by original order
+    withPriority.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      return a.order - b.order;
+    });
+
+    return withPriority.map(item => item.visit);
+  }
+
+  /**
+   * Generate visit column label from visit name
+   * Extracts standard format like "C1D2" from "Cycle 1 Day 2"
+   */
+  private generateVisitColumnLabel(visit: VisitSchedule): string {
+    const name = visit.visitName.toLowerCase();
+
+    // Try to extract cycle and day information
+    // Patterns: "Cycle X Day Y", "C1D2", "第X周期第Y天", etc.
+
+    // Pattern 1: "Cycle 1 Day 2" format
+    const cycleDayMatch = name.match(/cycle\s*(\d+)\s*day\s*(\d+)/i);
+    if (cycleDayMatch) {
+      return `C${cycleDayMatch[1]}D${cycleDayMatch[2]}`;
+    }
+
+    // Pattern 2: "C1D2" format already
+    const compactMatch = name.match(/c(\d+)d(\d+)/i);
+    if (compactMatch) {
+      return `C${compactMatch[1]}D${compactMatch[2]}`.toUpperCase();
+    }
+
+    // Pattern 3: Chinese format "第X周期第Y天"
+    const chineseMatch = name.match(/第(\d+)周期.*?第(\d+)天/);
+    if (chineseMatch) {
+      return `C${chineseMatch[1]}D${chineseMatch[2]}`;
+    }
+
+    // Pattern 4: Day-only format like "Day 1", "Day -1"
+    const dayMatch = name.match(/day\s*(-?\d+)/i);
+    if (dayMatch) {
+      return `D${dayMatch[1]}`;
+    }
+
+    // Pattern 5: Week format like "Week 1"
+    const weekMatch = name.match(/week\s*(\d+)/i);
+    if (weekMatch) {
+      return `W${weekMatch[1]}`;
+    }
+
+    // Default: use visit number + name
+    return visit.visitNumber ? `${visit.visitNumber}-${visit.visitName}` : visit.visitName;
+  }
+
+  /**
+   * Format time window as "Day X ± Y天" format
+   * Examples:
+   *   "Day -28 ~ Day -1" => "Day -14.5 ± 13.5天"
+   *   "Day 2" => "Day 2 ± 0天"
+   *   "Day 2 ~ Day 4" => "Day 3 ± 1天"
+   */
+  private formatTimeWindow(windowStart: string, windowEnd: string): string {
+    // Extract day numbers from window strings
+    const extractDay = (s: string): number | null => {
+      const match = s.match(/day\s*(-?\d+(?:\.\d+)?)/i);
+      return match ? parseFloat(match[1]) : null;
+    };
+
+    const startDay = extractDay(windowStart);
+    const endDay = extractDay(windowEnd);
+
+    if (startDay !== null && endDay !== null) {
+      const center = (startDay + endDay) / 2;
+      const tolerance = Math.abs(endDay - startDay) / 2;
+
+      // Format as "Day X ± Y天"
+      const centerStr = center % 1 === 0 ? center.toString() : center.toFixed(1);
+      const toleranceStr = tolerance % 1 === 0 ? tolerance.toString() : tolerance.toFixed(1);
+
+      return `Day ${centerStr} ± ${toleranceStr}天`;
+    }
+
+    // Fallback: return original format
+    return `${windowStart} ~ ${windowEnd}`;
+  }
+
+  /**
+   * Format date range as "YYYY-MM-DD ~ YYYY-MM-DD" format
+   */
+  private formatDateRange(startDate?: string, endDate?: string, fallbackDate?: string): string {
+    if (startDate && endDate) {
+      return `${startDate} ~ ${endDate}`;
+    }
+    if (fallbackDate) {
+      return fallbackDate;
+    }
+    return '';
   }
 
   /**
@@ -467,6 +659,43 @@ export class ExcelGenerator {
   // ==========================================================================
   // Styling Methods
   // ==========================================================================
+
+  /**
+   * Style double header row (for visit time checklist)
+   * Row 1: Main headers, Row 2: Time windows
+   */
+  private styleDoubleHeaderRow(
+    sheet: ExcelJS.Worksheet,
+    headerRow1: ExcelJS.Row,
+    headerRow2: ExcelJS.Row
+  ): void {
+    // Style Row 1 (main headers)
+    headerRow1.font = { bold: true, size: 12, color: { argb: EXCEL_CONSTANTS.COLORS.HEADER_TEXT } };
+    headerRow1.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: EXCEL_CONSTANTS.COLORS.HEADER_BG },
+    };
+    headerRow1.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    headerRow1.height = EXCEL_CONSTANTS.ROW_HEIGHTS.HEADER;
+    headerRow1.border = {
+      bottom: { style: 'thin' },
+      top: { style: 'thin' },
+    };
+
+    // Style Row 2 (time windows)
+    headerRow2.font = { bold: true, size: 11, color: { argb: EXCEL_CONSTANTS.COLORS.HEADER_TEXT } };
+    headerRow2.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: EXCEL_CONSTANTS.COLORS.HEADER_BG },
+    };
+    headerRow2.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    headerRow2.height = EXCEL_CONSTANTS.ROW_HEIGHTS.NORMAL;
+    headerRow2.border = {
+      bottom: { style: 'thin' },
+    };
+  }
 
   /**
    * Style header row

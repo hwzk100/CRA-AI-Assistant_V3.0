@@ -112,9 +112,43 @@ export const AI_CONSTANTS = {
   // GLM-4 model settings
   MODEL: {
     NAME: 'glm-4',
+    VISION_NAME: 'glm-4v',
     MAX_TOKENS: 4096,
     TEMPERATURE: 0.3,
     TOP_P: 0.7,
+  },
+
+  // Model options for user selection
+  MODEL_OPTIONS: [
+    {
+      value: 'glm-4',
+      label: 'GLM-4 标准版',
+      description: '适用于复杂文本分析，准确度高',
+    },
+    {
+      value: 'glm-4-flash',
+      label: 'GLM-4 Flash',
+      description: '快速响应，适合简单文本任务',
+    },
+  ],
+
+  VISION_MODEL_OPTIONS: [
+    {
+      value: 'glm-4v',
+      label: 'GLM-4V 标准版',
+      description: '高精度图片识别，适合复杂图像',
+    },
+    {
+      value: 'glm-4v-flash',
+      label: 'GLM-4V Flash',
+      description: '快速图片识别，适合简单图像处理',
+    },
+  ],
+
+  // Image processing settings
+  IMAGE: {
+    MAX_SIZE: 10 * 1024 * 1024, // 10MB
+    SUPPORTED_FORMATS: ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'],
   },
 
   // Rate limiting

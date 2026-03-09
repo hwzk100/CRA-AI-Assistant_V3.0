@@ -6,6 +6,7 @@ import { Result, CriteriaSet, VisitSchedule, MedicationRecord } from '@shared/ty
 export interface GLMConfig {
     apiKey: string;
     model?: string;
+    visionModel?: string;
     temperature?: number;
     topP?: number;
     maxTokens?: number;
@@ -99,6 +100,22 @@ export declare class GLMService {
      * Reset rate limiter
      */
     resetRateLimiter(): void;
+    /**
+     * Extract text and information from image using GLM-4 Vision
+     */
+    extractFromImage(imageDataUrl: string, prompt?: string): Promise<Result<string>>;
+    /**
+     * Extract criteria from protocol image using vision
+     */
+    extractCriteriaFromImage(imageDataUrl: string): Promise<Result<CriteriaSet>>;
+    /**
+     * Extract visit schedule from protocol image using vision
+     */
+    extractVisitScheduleFromImage(imageDataUrl: string): Promise<Result<VisitSchedule[]>>;
+    /**
+     * Recognize medications from medical record image using vision
+     */
+    recognizeMedicationsFromImage(imageDataUrl: string): Promise<Result<MedicationRecord[]>>;
 }
 export declare const createGLMService: (config: GLMConfig) => GLMService;
 export declare const getGLMService: () => GLMService | null;

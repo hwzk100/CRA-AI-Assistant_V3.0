@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"><title>CRA AI Assistant V3.0</title><style>* {
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*;"><title>CRA AI Assistant V3.0</title><style>* {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
@@ -11,4 +11,7 @@
     #root {
       width: 100vw;
       height: 100vh;
-    }</style><script defer="defer" src="index.js"></script></head><body><div id="root"></div></body></html>
+    }</style><script defer="defer" src="index.js"></script></head><body><div id="root"></div><script>// Polyfill for global in renderer process
+    if (typeof global === 'undefined') {
+      window.global = window;
+    }</script></body></html>

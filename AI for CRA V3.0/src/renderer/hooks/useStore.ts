@@ -412,7 +412,22 @@ export const useStore = create<AppStore>()(
         medications: state.medications,
       }),
       // Version migration
-      version: 1,
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version === 1) {
+          // Migrate from version 1 to version 2
+          // Add default model settings for existing users
+          if (persistedState.settings) {
+            if (!persistedState.settings.model) {
+              persistedState.settings.model = 'glm-4';
+            }
+            if (!persistedState.settings.visionModel) {
+              persistedState.settings.visionModel = 'glm-4v-flash';
+            }
+          }
+        }
+        return persistedState;
+      },
     }
   )
 );

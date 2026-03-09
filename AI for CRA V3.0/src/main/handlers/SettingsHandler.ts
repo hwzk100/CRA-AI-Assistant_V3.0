@@ -101,10 +101,12 @@ export const setupSettingsHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindo
         const newSettings = { ...currentSettings, ...settings };
         saveSettings(newSettings);
 
-        // Update GLM service if API key changed
-        if (settings.apiKey !== undefined) {
+        // Update GLM service if API key, model, or visionModel changed
+        if (settings.apiKey !== undefined || settings.model !== undefined || settings.visionModel !== undefined) {
           const glmService = createGLMService({
-            apiKey: settings.apiKey as string,
+            apiKey: newSettings.apiKey as string,
+            model: newSettings.model as string,
+            visionModel: newSettings.visionModel as string,
           });
           const initResult = glmService.initialize();
           if (initResult.success === false) {
